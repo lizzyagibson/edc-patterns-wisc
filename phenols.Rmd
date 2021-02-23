@@ -1,0 +1,165 @@
+---
+title: "Phenols"
+author: "Lizzy Gibson"
+date: "2/19/2019"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+options(scipen = 999)
+library(haven)
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(broom)
+library(tableone)
+library(xtable)
+```
+
+## Read Data
+
+```{r data_phenol}
+library(MNdata)
+
+phenol <- mn_edc %>% dplyr::select(sid, 11:18, 
+                            grep("_detect", colnames(.))) %>% 
+  dplyr::select(-10:-18) %>% 
+  rename_all(~str_to_upper(str_remove(., "_sg_adj"))) %>% 
+  drop_na()
+```
+
+### Clean Data
+
+* Remove Non-Reported Values "NR"
+
+* Assign > HS
+
+Highest calibrator (ng/mL)
+                                              
+* BP-3 = 1000
+* TCS = 1000
+* 24-DCP = 100
+* 25-DCP = 1000
+* M-PB = 1000
+* P-PB = 1000
+* B-PB = 500
+
+## % < LOD
+
+LODs:
+
+* benzophenone-3 (BP-3) = 0.4
+* triclosan (TCS) = 2.3
+* 2 4-dichlorophenol (24-DCP) = 0.2
+* 2 5-dichlorophenol (25-DCP) = 0.2
+* Methyl Paraben (M-PB) = 1.0
+* Propyl Paraben (P-PB) = 0.2
+* Butyl Paraben (B-PB) = 0.2
+
+* BPA  = 0.4
+
+BPA Value Labels:
+
+* (0) "no flag"
+* (1) "<LOD"
+* (-9) "missing"
+
+```{r}
+lod_bpa <- phenol %>% dplyr::select(BPA_DETECT) %>% 
+  table() %>% as.data.frame() %>% as_tibble() %>% 
+  rename(lod = 1) %>% 
+  spread(lod, Freq) %>% 
+  mutate(Phenols = "BPA") %>% 
+  rename(N_Detect = `0`, N_BLOD = '1') %>% 
+  dplyr::select(Phenols, N_Detect, N_BLOD)
+lod_bpa
+```
+
+* benzophenone-3 (BP-3) = 0.4
+* triclosan (TCS) = 2.3
+* 2 4-dichlorophenol (24-DCP) = 0.2
+* 2 5-dichlorophenol (25-DCP) = 0.2
+* Methyl Paraben (M-PB) = 1.0
+* Propyl Paraben (P-PB) = 0.2
+* Butyl Paraben (B-PB) = 0.2
+
+```{r}
+phenol_lod <- phenol %>% dplyr::select(SID, grep("DETECT", colnames(.)), -BPA_DETECT) %>%
+  gather(Phenols, Detection, -SID) %>% 
+  mutate(Detection = as.factor(Detection),
+         Phenols = str_remove(Phenols, "_DETECT")) %>% 
+  dplyr::select(-SID) %>% 
+  group_by(Phenols) %>%
+  count(Detection) %>% 
+  mutate(Detection = case_when(Detection == "" ~ "N_Detect",
+                          grepl("<LOD", Detection) ~ "N_BLOD",
+                          grepl(">HS", Detection) ~ "N_Detect",
+                          grepl("Result", Detection) ~ "Drop")) %>% 
+  group_by(Phenols, Detection) %>% 
+  summarise(N = sum(n)) %>% 
+  spread(Detection, N) %>% 
+  mutate(N_BLOD = as.integer(replace_na(N_BLOD, 0))) %>% 
+  dplyr::select(Phenols, N_Detect, N_BLOD) %>% 
+  bind_rows(lod_bpa)
+  
+detection <- phenol_lod %>% 
+  mutate(P_Detect = round(N_Detect/(N_BLOD + N_Detect), 2),
+         P_BLOD = round(N_BLOD/(N_BLOD + N_Detect), 2))
+detection
+```
+
+## Concentrations
+
+```{r}
+conc = phenol %>% dplyr::select(2:9) %>% 
+  pivot_longer(DCP_24:BPA,
+               names_to = "Phenols") %>% 
+  group_by(Phenols) %>% 
+  summarise(qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),
+            Mean = mean(value),
+            Stdev = sd(value),
+            Max = max(value)) %>% 
+  pivot_wider(names_from = "prob",
+              values_from = "qs") %>% 
+  dplyr::select(Phenols, Mean, Stdev, Q25, Median, Q75, Max)
+conc
+```
+
+## Table
+
+```{r}
+conc_table <- left_join(detection, conc, by = "Phenols") %>%
+  ungroup() %>% 
+  dplyr::select(Phenols, `<LOD` = N_BLOD, Detected = N_Detect, 
+                Prop_Detected = P_Detect, everything(), -P_BLOD) %>% 
+  mutate_if(is.numeric, round, digits = 2)
+
+conc_table %>% knitr::kable()
+
+#xtable(conc_table)
+```
+
+## Heat Map
+
+```{r}
+heat <- phenol %>% dplyr::select(2:9)
+
+cormat <- round(cor(heat, use = "pairwise.complete.obs", method = c("spearman")),2)
+
+melted_cormat <- melt(cormat) %>% rename(Correlation = value)
+
+ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
+  geom_tile(aes(fill = Correlation), colour = "white") + 
+  scale_fill_gradient2(low = "#00BFC4", mid = "white", high = "#F8766D", 
+                       midpoint = 0, 
+                      na.value = "transparent", limits = c(-1, 1)) +
+  labs(x = "", y = "", title = "") + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+```
+

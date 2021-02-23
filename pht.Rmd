@@ -1,0 +1,112 @@
+---
+title: "Phthalates"
+author: "Lizzy Gibson"
+date: "2/19/2019"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+options(scipen = 999)
+library(haven)
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(broom)
+library(tableone)
+library(xtable)
+```
+
+## Read Data
+
+```{r pcb}
+library(MNdata)
+
+pht <- mn_edc %>% dplyr::select(1:10, grep("detect", colnames(.))) %>%
+  dplyr::select(-grep("_m2", colnames(.))) %>%
+  dplyr::select(1:19) %>% 
+  rename_all(~str_remove(., "_sg_adj")) %>% 
+  drop_na()
+pht
+```
+
+## % < LOD
+
+LODs:
+
+* MECPP = 0.6
+* MEHHP = 0.7
+* MEOHP = 0.7
+* MCPP = 0.2
+* MiBP = 0.3
+* MnBP = 0.6
+* MBzP = 0.216
+* MEP = 0.528
+* MEHP = 1.2
+* MCOP = 0.7
+* MCNP = 0.6
+
+Value Labels:
+
+(1) "below LOD"
+(0) "no flag"
+(-9) "missing"
+(2) "mean of ufiles 2&3, no flag"
+(3) "mean of ufiles 3 & 8, no flag"
+(4) "mean of ufiles revised & 3, no flag"
+
+Remove (-9) missing because of QC issues or carryover.
+
+```{r}
+lod <- pht %>% 
+  dplyr::select(grep("detect", colnames(.))) %>%
+  gather(pht, level) %>% 
+  group_by(pht, level) %>% 
+  summarize(n = n()) %>% 
+  spread(level, n) %>% 
+  mutate_all(~replace_na(., 0))
+lod
+# Number of obs with each flag for each pht
+
+detected <- lod %>% 
+  mutate(Prop_Detected = `0`/(`0` + `1`)) %>%
+  ungroup() %>% 
+  dplyr::select(pht, `<LOD` = `1`, Detected = `0`, Prop_Detected) %>% 
+  mutate(pht = str_remove(pht, "_detect"),
+         pht = str_to_upper(pht)) %>% 
+  rename(PHT = pht)
+detected
+```
+
+## Concentrations
+
+** **Need to handle <LOD** **
+```{r}
+conc = pht %>% dplyr::select(2:10) %>% 
+  pivot_longer(MECPP:MEHP,
+               names_to = "PHT") %>% 
+  group_by(PHT) %>% 
+  summarise(qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),
+            Mean = mean(value),
+            Stdev = sd(value),
+            Max = max(value)) %>% 
+  pivot_wider(names_from = "prob",
+              values_from = "qs") %>% 
+  dplyr::select(PHT, Mean, Stdev, Q25, Median, Q75, Max)
+```
+
+## Table
+
+```{r}
+pht_conc <- left_join(detected, conc, by = c("PHT")) %>%
+  mutate_if(is.numeric, round, digits = 2)
+pht_conc
+
+pht_conc  %>% knitr::kable()
+
+#xtable(pht_conc)
+```
+
