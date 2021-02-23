@@ -18,9 +18,10 @@ library(R.matlab)
 library(MNdata) # my data
 library(janitor)
 library(NMF)
+library(reshape2)
 
-source(here::here("./Results/compare_functions.R"))
-source(here::here("./Results/fig_set.R"))
+source(here::here("../BN2MF/Results/compare_functions.R"))
+source(here::here("../BN2MF/Results/fig_set.R"))
 ```
 
 ## Mothers & Newborns Cohort
@@ -34,11 +35,12 @@ source(here::here("./Results/fig_set.R"))
 ```{r}
 edc <- 
   mn_edc %>% 
-  dplyr::select(grep("sg_adj", colnames(.))) %>% 
+  dplyr::select(sid, grep("sg_adj", colnames(.))) %>% 
   drop_na() %>% 
-  clean_names()
+  clean_names() %>% dplyr::select(-sid)
+edc
 
-names(edc) <- str_remove(names(edc), "_sg_adj")
+names(edc) <- str_to_upper(str_remove(names(edc), "_sg_adj"))
 edc_std <- apply(edc, 2, function(x) x/sd(x)) %>% as_tibble()
 
 # rearrange to pht, phenol, parabens
@@ -59,6 +61,33 @@ cor_names <- tibble(x = seq(edc_re), y = seq(edc_re),
 ggc + geom_text(data=cor_names, aes(x, y, label=lbs), 
                 nudge_x = 2.25, nudge_y = 0.05, size = 4, color = "grey50")
 #dev.off()
+```
+
+```{r}
+# Get lower triangle of the correlation matrix
+get_lower_tri<-function(x){
+  x[upper.tri(x)] <- NA
+  return(x)
+}
+
+cormat <- get_lower_tri(round(cor(edc_re, use = "complete.obs", method = c("spearman")),2))
+
+melted_cormat <- melt(cormat) %>% 
+  rename(Correlation = value) %>% 
+  mutate(Var1 = str_replace(Var1, "_", "-"),
+    Var1 = fct_inorder(Var1),
+    Var2 = str_replace(Var2, "_", "-"),
+    Var2 = fct_inorder(Var2))
+
+ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
+  geom_tile(aes(fill = Correlation), colour = "white") + 
+  scale_fill_gradient2(low = "blue", high = "red", 
+                       midpoint = 0, 
+                       na.value = "grey80") +
+  labs(x = "", y = "", title = "") + 
+  theme_test(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
 ```
 
 ## BN2MF
