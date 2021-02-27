@@ -19,6 +19,8 @@ library(MNdata) # my data
 library(janitor)
 library(NMF)
 library(reshape2)
+library(viridis)
+library("wesanderson")
 
 source(here::here("../BN2MF/Results/compare_functions.R"))
 source(here::here("../BN2MF/Results/fig_set.R"))
@@ -33,28 +35,19 @@ source(here::here("../BN2MF/Results/fig_set.R"))
 ### Correlation
 
 ```{r}
-edc <- 
-  mn_edc %>% 
-  dplyr::select(sid, grep("sg_adj", colnames(.))) %>% 
-  drop_na() %>% 
-  clean_names() %>% dplyr::select(-sid)
-edc
+edc = read_csv("./Data/ppp_dat.csv") %>% dplyr::select(1:9, 11:13, 10, 14:17)
 
-names(edc) <- str_to_upper(str_remove(names(edc), "_sg_adj"))
 edc_std <- apply(edc, 2, function(x) x/sd(x)) %>% as_tibble()
 
-# rearrange to pht, phenol, parabens
-edc_re <- edc %>% dplyr::select(1:11, 13, 16:17, 12, 14:15)
-
 # corr does not care if you standardize
-ggc <- ggcorr(edc_re, c("everything", "spearman"),
+ggc <- ggcorr(edc, c("everything", "spearman"),
        size = 0,  # set this to zero
        layout.exp = 3) + 
        theme_minimal()
 
 # Create labels and plot
-lbs = str_pad(str_replace(str_to_upper(names(edc_re)), "_", "-"), 7)
-cor_names <- tibble(x = seq(edc_re), y = seq(edc_re), 
+lbs = str_pad(str_replace(str_to_upper(names(edc)), "_", "-"), 7)
+cor_names <- tibble(x = seq(edc), y = seq(edc), 
                   lbs = lbs)
 
 #pdf("./Apply/mn_edc_corr.pdf", width = 7, height = 5)
@@ -70,7 +63,10 @@ get_lower_tri<-function(x){
   return(x)
 }
 
-cormat <- get_lower_tri(round(cor(edc_re, use = "complete.obs", method = c("spearman")),2))
+cormat <- get_lower_tri(round(cor(edc, use = "complete.obs", method = c("spearman")),2))
+
+as_tibble(cormat) %>% pivot_longer(MEHHP:BPA) %>% drop_na() %>% filter(value != 1) %>% 
+  pull(value) %>% sort()
 
 melted_cormat <- melt(cormat) %>% 
   rename(Correlation = value) %>% 
@@ -79,26 +75,33 @@ melted_cormat <- melt(cormat) %>%
     Var2 = str_replace(Var2, "_", "-"),
     Var2 = fct_inorder(Var2))
 
+cool = rainbow(100, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
+warm = rainbow(100, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
+cols = c(rev(cool), rev(warm))
+
+pdf("./Figures/ppp_corr.pdf")
 ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
-  geom_tile(aes(fill = Correlation), colour = "white") + 
-  scale_fill_gradient2(low = "blue", high = "red", 
-                       midpoint = 0, 
+  geom_tile(aes(fill = Correlation), color = "white") + 
+  scale_fill_gradientn(colors=cols, limits = c(-1,1),
                        na.value = "grey80") +
   labs(x = "", y = "", title = "") + 
-  theme_test(base_size = 15) +
+  theme_test(base_size = 20) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 10),
         legend.position = "bottom")
+dev.off()
 ```
 
 ## BN2MF
 
 ```{r}
-eh <- readMat(here::here("./Apply/mn2_EH.mat"))[[1]]
+eh <- readMat(here::here("./Data/mn2_EH.mat"))[[1]]
+# ["MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA"];
+
 colnames(eh) <- toupper(names(edc))
 
 applied <- eh[2:1,] %>% 
   as_tibble() %>% 
-  dplyr::select(1:11, 13, 16:17, 12, 14:15) %>% 
   mutate(Pattern = 1:2) %>% 
   gather(key = Chemicals, value = Loadings, -Pattern) %>%
   mutate(Class = case_when(grepl("PB", Chemicals) ~ "Parabens",
@@ -109,7 +112,7 @@ applied <- eh[2:1,] %>%
 ```
 
 ```{r, fig.width=18}
-#pdf("Apply/mn2_edc_loadings.pdf", width = 18)
+#pdf("./Figures/mn2_edc_loadings.pdf", width = 18)
 applied %>% 
   mutate(Chemicals = fct_inorder(Chemicals)) %>%
   ggplot(aes(x = Chemicals, y = Loadings, color = Class)) + 
@@ -129,7 +132,7 @@ applied %>%
 ```
 
 ```{r}
-#pdf("Apply/mn2_edc_loadings_flip.pdf", width = 15)
+#pdf("./Figures/mn2_edc_loadings_flip.pdf", width = 15)
 applied %>% 
   mutate(Chemicals = fct_inorder(Chemicals)) %>%
   ggplot(aes(x = Loadings, y = Chemicals, color = Class)) + 
@@ -137,7 +140,7 @@ applied %>%
   geom_segment(aes(yend = Chemicals, xend = 0), size = 1.5) +
   facet_wrap(.~Pattern, scales = "free_x") +
   theme_bw(base_size = 25) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 18),
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
         strip.background = element_blank(),
         strip.text = element_text(size = 30),
         legend.title = element_blank(),
@@ -147,7 +150,7 @@ applied %>%
   scale_fill_nejm()
 #dev.off()
 
-pdf("Apply/mn2_edc_loadings_tall.pdf", height = 10)
+#pdf("Apply/mn2_edc_loadings_tall.pdf", height = 10)
 applied %>% 
   mutate(Chemicals = fct_inorder(Chemicals)) %>%
   ggplot(aes(x = Loadings, y = Chemicals, color = Class)) + 
@@ -172,18 +175,18 @@ dev.off()
 
 ```{r}
 prcomp(edc_std)$sdev
-sum( prcomp(edc_std)$sdev[1:11]/sum(prcomp(edc_std)$sdev) )
+sum( prcomp(edc_std)$sdev[1:10]/sum(prcomp(edc_std)$sdev) )
 # 11 > 80% var
-# no obvious elbow
 # 6 singular values > 1
 
 plot(prcomp(edc_std))
+# no obvious elbow
 
 as_tibble(prcomp(edc_std)$rotation) %>% 
   mutate(edc = colnames(edc)) %>% 
   pivot_longer(1:17) %>% 
   mutate(name = as.factor(name)) %>% 
-  filter(name %in% c("PC1", "PC2", "PC3", "PC4", "PC5", "PC6")) %>% 
+  filter(name %in% c("PC1", "PC2", "PC3", "PC4")) %>% 
   ggplot(aes(x = edc, y = value)) + 
   geom_col() +
   facet_wrap(.~ name)
@@ -223,6 +226,19 @@ bic_3p <- sum((edc_std - (basis(nmf_3p)%*%coef(nmf_3p)))^2) + (1/2)*(n + p) * 3 
 bic_4p <- sum((edc_std - (basis(nmf_4p)%*%coef(nmf_4p)))^2) + (1/2)*(n + p) * 4 * log(n * p)
 bic_5p <- sum((edc_std - (basis(nmf_5p)%*%coef(nmf_5p)))^2) + (1/2)*(n + p) * 5 * log(n * p)
 bic_6p <- sum((edc_std - (basis(nmf_6p)%*%coef(nmf_6p)))^2) + (1/2)*(n + p) * 5 * log(n * p)
+
+bic_1 
+bic_2 
+bic_3 
+bic_4 
+bic_5 
+bic_6 
+bic_1p
+bic_2p
+bic_3p
+bic_4p
+bic_5p
+bic_6p
 ```
 
 ```{r}
