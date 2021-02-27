@@ -1,0 +1,122 @@
+---
+title: "Phthalates"
+author: "Lizzy Gibson"
+date: "2/19/2019"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+options(scipen = 999)
+library(haven)
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(broom)
+library(tableone)
+library(xtable)
+```
+
+## Read Data
+
+```{r pcb}
+library(MNdata)
+
+pht <- pht %>% drop_na(MEHHP:MEP)
+pht
+
+phenol <- phenol %>% drop_na(BP_3:BPA) %>% 
+          rename(B_PB_detect = B_PB_LOD_0_2, TCS_detect = TCS_LOD_2_3,
+                 DCP_24_detect = X24_DCP_LOD_0_2, BP_3_detect = BP_3_LOD_0_4) %>%   
+          mutate_at(vars(10:13), ~ifelse(is.na(.), 0, 1))
+phenol
+
+ppp = inner_join(pht, phenol, by = "SID")
+ppp
+```
+
+## % < LOD
+
+LODs:
+
+* MECPP = 0.6
+* MEHHP = 0.7
+* MEOHP = 0.7
+* MCPP = 0.2
+* MiBP = 0.3
+* MnBP = 0.6
+* MBzP = 0.216
+* MEP = 0.528
+* MEHP = 1.2
+* MCOP = 0.7
+* MCNP = 0.6
+
+Value Labels:
+
+(1) "below LOD"
+(0) "no flag"
+(-9) "missing"
+(2) "mean of ufiles 2&3, no flag"
+(3) "mean of ufiles 3 & 8, no flag"
+(4) "mean of ufiles revised & 3, no flag"
+
+Remove (-9) missing because of QC issues or carryover.
+
+```{r}
+lod <- ppp %>% 
+  dplyr::select(grep("(detect|DETECT)", colnames(.))) %>%
+  gather(chem, level) %>% 
+  mutate(level = ifelse(level > 1, 0, level)) %>% 
+  group_by(chem, level) %>% 
+  summarize(n = n()) %>% 
+  spread(level, n) %>% 
+  mutate_all(~replace_na(., 0))
+lod
+# Number of obs with each flag for each pht
+
+detected <- lod %>% 
+  mutate(Prop_Detected = `0`/(`1` + `0`)) %>%
+  ungroup() %>% 
+  dplyr::select(chem, `<LOD` = `1`, Detected = `0`, Prop_Detected) %>% 
+  mutate(chem = str_remove(chem, "_detect")) %>% 
+  rbind(., tibble(chem = "M_PB", `<LOD` = 0, Detected = 343, Prop_Detected = 1)) %>% 
+  rbind(., tibble(chem = "P_PB", `<LOD` = 0, Detected = 343, Prop_Detected = 1)) %>% 
+  rbind(., tibble(chem = "DCP_25", `<LOD` = 0, Detected = 343, Prop_Detected = 1))
+detected
+```
+
+## Concentrations
+
+```{r}
+conc = ppp %>% dplyr::select(c(2:10, 20:27)) %>% 
+  pivot_longer(MEHHP:BPA,
+               names_to = "chem") %>% 
+  group_by(chem) %>% 
+  summarise(qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),
+            Mean = mean(value, na.rm = TRUE),
+            Stdev = sd(value, na.rm = TRUE),
+            Max = max(value, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = "prob",
+              values_from = "qs")
+```
+
+## Table
+
+```{r}
+ppp_conc <- left_join(detected, conc, by = c("chem")) %>%
+  mutate_if(is.numeric, round, digits = 2)
+ppp_conc
+
+ppp_conc  %>% knitr::kable()
+
+#xtable(pht_conc)
+```
+
+```{r}
+ppp_out = ppp %>% dplyr::select(2:10, 20:27)
+#write_csv(ppp_out, file = "./Data/ppp_dat.csv")
+```
+

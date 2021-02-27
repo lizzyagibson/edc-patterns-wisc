@@ -25,11 +25,7 @@ library(xtable)
 ```{r pcb}
 library(MNdata)
 
-pht <- mn_edc %>% dplyr::select(1:10, grep("detect", colnames(.))) %>%
-  dplyr::select(-grep("_m2", colnames(.))) %>%
-  dplyr::select(1:19) %>% 
-  rename_all(~str_remove(., "_sg_adj")) %>% 
-  drop_na()
+pht <- pht %>% drop_na()
 pht
 ```
 
@@ -72,21 +68,20 @@ lod
 # Number of obs with each flag for each pht
 
 detected <- lod %>% 
-  mutate(Prop_Detected = `0`/(`0` + `1`)) %>%
+  mutate(Detected = `0` + `2` + `3` + `4`,
+    Prop_Detected = Detected/(`1` + Detected)) %>%
   ungroup() %>% 
-  dplyr::select(pht, `<LOD` = `1`, Detected = `0`, Prop_Detected) %>% 
-  mutate(pht = str_remove(pht, "_detect"),
-         pht = str_to_upper(pht)) %>% 
+  dplyr::select(pht, `<LOD` = `1`, Detected, Prop_Detected) %>% 
+  mutate(pht = str_remove(pht, "_detect")) %>% 
   rename(PHT = pht)
 detected
 ```
 
 ## Concentrations
 
-** **Need to handle <LOD** **
 ```{r}
 conc = pht %>% dplyr::select(2:10) %>% 
-  pivot_longer(MECPP:MEHP,
+  pivot_longer(MEHHP:MEP,
                names_to = "PHT") %>% 
   group_by(PHT) %>% 
   summarise(qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),

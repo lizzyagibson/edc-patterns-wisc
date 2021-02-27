@@ -25,11 +25,7 @@ library(xtable)
 ```{r data_phenol}
 library(MNdata)
 
-phenol <- mn_edc %>% dplyr::select(sid, 11:18, 
-                            grep("_detect", colnames(.))) %>% 
-  dplyr::select(-10:-18) %>% 
-  rename_all(~str_to_upper(str_remove(., "_sg_adj"))) %>% 
-  drop_na()
+phenol <- phenol %>% drop_na(BP_3:BPA)
 ```
 
 ### Clean Data
