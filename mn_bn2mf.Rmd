@@ -79,7 +79,7 @@ cool = rainbow(100, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue
 warm = rainbow(100, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
 cols = c(rev(cool), rev(warm))
 
-pdf("./Figures/ppp_corr.pdf")
+#pdf("./Figures/ppp_corr.pdf")
 ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
   geom_tile(aes(fill = Correlation), color = "white") + 
   scale_fill_gradientn(colors=cols, limits = c(-1,1),
@@ -89,7 +89,7 @@ ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.text = element_text(size = 10),
         legend.position = "bottom")
-dev.off()
+#dev.off()
 ```
 
 ## BN2MF
@@ -166,7 +166,7 @@ applied %>%
         legend.background = element_rect(fill = "#ffffffaa", colour = NA)) +
   expand_limits(y=0) +
   scale_fill_nejm()
-dev.off()
+#dev.off()
 ```
 
 ## Compare
