@@ -1,0 +1,273 @@
+---
+title: "Regressions"
+subtitle: "Phthalates & phenols in M&N cohort"
+author: "Lizzy Gibson"
+date: "3/6/2021"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: 'hide'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, cache=TRUE, autodep=TRUE, fig.align='center')
+options(scipen = 999)
+library(haven)
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(broom)
+library(tableone)
+library(xtable)
+library(GGally)
+library(gtsummary)
+library(huxtable)
+library(broom)
+library(R.matlab)
+library(MNdata) # Local package
+
+source(here::here("/Users/lizzy/BN2MF/functions/fig_set.R"))
+```
+
+## M&N Data
+
+* 5 phenols  
+* 3 parabens  
+* 9 phthalates  
+
+```{r read}
+predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
+iq = mn_outcome %>% dplyr::select(SID, WISC = WSC_CSFS_84)
+mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
+# 32 without WISC
+
+ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
+
+summary(ewa)
+apply(ewa, 2, sd)
+
+mn_all = bind_cols(mn_dat, ewa)
+```
+
+## Distributions
+
+### Chemicals
+
+```{r, fig1, fig.height=10, fig.width=12}
+mn_all[,1:18] %>% 
+  pivot_longer(MEHHP:BPA) %>% 
+  mutate(name = str_replace(name, "_", "-")) %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram(aes(y = ..density..)) +
+  facet_wrap(name~., scales = "free") + 
+  labs(y = "Density", x="") +
+  theme(axis.text.y = element_blank(),
+        text = element_text(size = 30),
+        axis.text.x = element_text(size = 10),
+        axis.title.y = element_text(size = 35))
+```
+
+### Patterns
+
+```{r, fig2}
+mn_all[,29:30] %>% 
+  pivot_longer(P1:P2) %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram(aes(y = ..density..)) +
+  facet_wrap(name~., scales = "free") + 
+  labs(y = "Density", x="") +
+  theme(axis.text.y = element_blank(),
+        text = element_text(size = 30),
+        axis.text.x = element_text(size = 10),
+        axis.title.y = element_text(size = 30))
+```
+
+## Predictors of exposure
+
+```{r}
+#function to take exposure and outcome, regress, and output as tibble
+regress_model <- function(out, pred) {
+
+fit <- lm(get(out) ~ get(pred), data = mn_all)
+
+tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
+  mutate(predictor = pred,
+         outcome = out) %>% 
+  dplyr::select(-statistic) %>% 
+  filter(term != "(Intercept)") %>% 
+  bind_cols(., glance(fit) %>% 
+  rename(model.p.value = p.value)) %>% 
+  dplyr::select(predictor, outcome, everything(),
+                -df.residual, -deviance, -logLik, -df, -statistic, -sigma, -term, -AIC, -BIC, -r.squared)
+}
+
+#Create lists of exposures and outcomes
+# chemicals are outcome here
+chem_pat = names(mn_all)[c(2:18,29:30)]
+
+# demographics are exposures
+demograph = names(mn_all)[19:27]
+
+ind_exp_models = tibble()
+#loop through lm for each exposure/outcome combo
+for (i in 1:length(chem_pat)) {
+  for (j in 1:length(demograph)) {
+  model_out <- regress_model(chem_pat[i], demograph[j])
+  ind_exp_models = bind_rows(ind_exp_models, model_out)
+  }
+}
+```
+
+**Demographic predictors of chemicals and pattern exposure**
+```{r}
+ind_exp_models %>% filter(p.value < 0.10) %>% arrange(desc(outcome))
+```
+
+### Log
+
+```{r}
+regress_outcome_log <- function(out, pred) {
+  
+fit <- lm(log(get(out)) ~ get(pred), data = mn_all)
+
+tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
+  mutate(predictor = pred,
+         outcome = out) %>% 
+  dplyr::select(-statistic) %>% 
+  filter(term != "(Intercept)") %>% 
+  bind_cols(., glance(fit) %>% 
+  rename(model.p.value = p.value)) %>% 
+  dplyr::select(predictor, outcome, everything(),
+                -df.residual, -deviance, -logLik, -df, -statistic, -sigma, -term, -AIC, -BIC, -r.squared)
+}
+
+# chemicals are outcome here
+# demographics are exposures
+
+ind_exp_logged = tibble()
+#loop through lm for each exposure/outcome combo
+for (i in 1:length(chem_pat)) {
+  for (j in 1:length(demograph)) {
+  model_out <- regress_outcome_log(chem_pat[i], demograph[j])
+  ind_exp_logged = bind_rows(ind_exp_logged, model_out)
+  }
+}
+```
+
+**Demographic predictors of logged chemicals and pattern exposure**
+```{r}
+ind_exp_logged %>% filter(p.value < 0.10) %>% arrange(desc(outcome))
+```
+
+## Predictors of outcome
+
+```{r}
+#Create lists of exposures and outcomes
+# WISC is the outcome here
+
+# demographics and chemicals and patterns are exposures
+demo_chem_pat = names(mn_all)[c(2:27, 29:30)]
+
+exp_wisc_models = tibble()
+#loop through lm for each exposure/outcome combo
+for (j in 1:length(demo_chem_pat)) {
+  model_out <- regress_model("WISC", demo_chem_pat[j])
+  exp_wisc_models = bind_rows(exp_wisc_models, model_out)
+}
+```
+
+**Chemical, demo, and pattern predictors of WISC outcome**
+```{r}
+exp_wisc_models %>% filter(p.value < 0.10)
+
+exp_wisc_models %>% filter(predictor %in% c("P1","P2"))
+```
+
+### Log
+
+```{r}
+regress_pred_log <- function(out, pred) {
+  
+fit <- lm(get(out) ~ log(get(pred)), data = mn_all)
+
+tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
+  mutate(predictor = pred,
+         outcome = out) %>% 
+  dplyr::select(-statistic) %>% 
+  filter(term != "(Intercept)") %>% 
+  bind_cols(., glance(fit) %>% 
+  rename(model.p.value = p.value)) %>% 
+  dplyr::select(predictor, outcome, everything(),
+                -df.residual, -deviance, -logLik, -df, -statistic, -sigma, -term, -AIC, -BIC, -r.squared)
+}
+
+# WISC is outcome
+# chemicals/patterns are exposure
+
+wisc_exp_logged = tibble()
+#loop through lm for each exposure/outcome combo
+for (j in 1:length(chem_pat)) {
+  model_out <- regress_pred_log("WISC", chem_pat[j])
+  wisc_exp_logged = bind_rows(wisc_exp_logged, model_out)
+  }
+```
+
+**logged chemical and pattern predictors of WISC outcome**
+```{r}
+wisc_exp_logged %>% filter(p.value < .10)
+```
+
+## Health models
+
+```{r}
+regress_health <- function(pred) {
+  
+fit <- lm(WISC ~ log(get(pred)) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX 
+          # + SMOKER_IN_HOME + M_AGE
+          , data = mn_all)
+
+tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
+  mutate(predictor = pred,
+         outcome = "WISC") %>% 
+  dplyr::select(-statistic) %>%
+  slice(2) %>% 
+  bind_cols(., glance(fit) %>% 
+  rename(model.p.value = p.value)) %>% 
+  dplyr::select(predictor, outcome, everything(),
+                -df.residual, -deviance, -logLik, -df, -statistic, -sigma, -AIC, -BIC, -r.squared, -term)
+}
+
+health_models = tibble()
+#loop through lm for each exposure/outcome combo
+for (j in 1:length(chem_pat)) {
+  model_out <- regress_health(chem_pat[j])
+  health_models = bind_rows(health_models, model_out)
+  }
+```
+
+**Adjusted health models**
+```{r}
+health_models %>% filter(p.value < 0.05)
+
+health_models %>% filter(predictor %in% c("P1", "P2"))
+```
+
+```{r}
+fit_patterns <- lm(WISC ~ P1 + P2 
+                          #log(P1) + log(P2)
+                          + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX 
+          + SMOKER_IN_HOME + M_AGE
+          , data = mn_all)
+```
+
+**Adjusted health model with P1 & P2**
+```{r}
+tidy(fit_patterns) %>% bind_cols(., as_tibble(confint(fit_patterns))) %>% 
+  dplyr::select(-statistic) %>%
+  bind_cols(., glance(fit_patterns) %>% 
+  rename(model.p.value = p.value)) %>% 
+  dplyr::select(-df.residual, -deviance, -logLik, -df, -statistic, -sigma, -AIC, -BIC, -r.squared)
+```
+
+
