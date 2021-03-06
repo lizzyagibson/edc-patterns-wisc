@@ -26,7 +26,7 @@ library(huxtable)
 library(MNdata) # Local package
 ```
 
-## Read Data
+## M&N Data
 
 * 5 phenols  
 * 3 parabens  
@@ -41,9 +41,42 @@ phenol <- mn_phenol %>% drop_na(BP_3:BPA) %>%
 ppp = inner_join(mn_pht, phenol, by = "SID") %>% dplyr::select(SID, MEHHP:MEP, BP_3:BPA, everything(), -sg)
 ```
 
-## Distributions \& Dectection
+## Demographics
 
-**1. Detection**
+```{r}
+iq = mn_outcome %>% dplyr::select(SID, WISC = WSC_CSFS_84)
+
+ppp_current = ppp %>% mutate(Subsample = "Study Population") %>% 
+              left_join(., mn_demo, by = "SID") %>% 
+              left_join(., iq, by = "SID") %>% 
+              dplyr::select(SID, 33:43)
+
+whole = mn_demo %>% 
+        left_join(., iq, by = "SID") %>% 
+        mutate(Subsample = "Entire Cohort")
+
+demo =  bind_rows(ppp_current, whole) %>% 
+        mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
+        dplyr::select(-SID) %>% 
+        rename(Ethnicity = ETH,
+               `Maternal education` = M_EDU,
+               `Marital status` = MARITAL_STATUS,
+               `Child sex` = SEX,
+               `HOME scale` = HOME_SCORE,
+               `Maternal IQ` = M_IQ,
+               `Maternal age at delivery` = M_AGE,
+               `Prenatal alcohol consumption` = ALCOHOL,
+               `Smoker in home` = SMOKER_IN_HOME)
+
+demo %>% tbl_summary(by = Subsample,
+                     statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% add_p() 
+
+# demo %>% tbl_summary(by = Subsample,
+#          statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% add_p()  %>%
+#          as_hux_table() %>% huxtable::to_latex()
+```
+
+## Distributions \& Dectection
 
 ```{r}
 lod <- ppp %>% 
@@ -66,11 +99,7 @@ detected <- lod %>%
   rbind(., tibble(Chemical = "M_PB",   `% <LOD` = 0)) %>% 
   rbind(., tibble(Chemical = "P_PB",   `% <LOD` = 0)) %>% 
   rbind(., tibble(Chemical = "DCP_25", `% <LOD` = 0))
-```
 
-**2. Concentrations**
-
-```{r}
 conc = ppp %>% dplyr::select(2:18) %>% 
   pivot_longer(MEHHP:BPA,
                names_to = "Chemical") %>% 
@@ -83,32 +112,36 @@ conc = ppp %>% dplyr::select(2:18) %>%
   pivot_wider(names_from = "prob",
               values_from = "qs") %>% 
   dplyr::select(Chemical:Min, Q25:Q75, Max)
-```
 
-```{r}
 ppp_table <- left_join(detected, conc, by = c("Chemical")) %>%
   mutate_if(is.numeric, round, digits = 2)
 
 ppp_table  %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
 
 #xtable(pht_conc)
-```
 
-```{r}
 ppp_conc = ppp %>% dplyr::select(2:18)
 #write_csv(ppp_conc, file = "./Data/ppp_conc.csv")
 ```
 
 ## Correlation
 
-```{r}
+```{r, fig.height=7, fig.width=7}
 # Get lower triangle of the correlation matrix
 get_lower_tri<-function(x){
   x[upper.tri(x)] <- NA
+  
+  for (i in 1:nrow(x)) {
+    for (j in 1:ncol(x)) {
+      if (j == i) {x[i,j] <- NA}
+    }
+  }
+  
   return(x)
 }
 
-cormat <- get_lower_tri(round(cor(ppp_conc, use = "complete.obs", method = c("spearman")),2))
+cormat <- get_lower_tri(round(cor(ppp_conc, use = "complete.obs", 
+                                  method = c("spearman")),2))[2:17, 1:16]
 
 melted_cormat <- melt(cormat) %>% 
   rename(Correlation = value) %>% 
@@ -133,32 +166,3 @@ ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) +
         legend.position = "bottom")
 #dev.off()
 ```
-
-## Demographics
-
-```{r}
-ppp_current = ppp %>% mutate(Subsample = "Study Population") %>% 
-              left_join(., mn_demo, by = "SID") %>% 
-              dplyr::select(SID, 33:42)
-
-whole = mn_demo %>% 
-        mutate(Subsample = "Entire Cohort")
-
-demo =  bind_rows(ppp_current, whole) %>% 
-        mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
-        dplyr::select(-SID) %>% 
-        rename(Ethnicity = ETH,
-               `Maternal education` = M_EDU,
-               `Marital status` = MARITAL_STATUS,
-               `Child sex` = SEX,
-               `HOME scale` = HOME_SCORE,
-               `Maternal IQ` = M_IQ,
-               `Maternal age at delivery` = M_AGE,
-               `Prenatal alcohol consumption` = ALCOHOL)
-
-demo %>% tbl_summary(by = Subsample) %>% add_p() 
-
-# demo %>% tbl_summary(by = Subsample) %>% add_p()  %>%
-#  as_hux_table() %>% huxtable::to_latex()
-```
-
