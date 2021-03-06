@@ -1,0 +1,164 @@
+---
+title: "Descriptive Statistics"
+subtitle: "Phthalates & phenols in M&N cohort"
+author: "Lizzy Gibson"
+date: "2/19/2019"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: 'hide'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+options(scipen = 999)
+library(haven)
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(broom)
+library(tableone)
+library(xtable)
+library(GGally)
+library(gtsummary)
+library(huxtable)
+library(MNdata) # Local package
+```
+
+## Read Data
+
+* 5 phenols  
+* 3 parabens  
+* 9 phthalates  
+
+```{r pcb}
+phenol <- mn_phenol %>% drop_na(BP_3:BPA) %>% 
+          rename(B_PB_detect = B_PB_LOD_0_2, TCS_detect = TCS_LOD_2_3,
+                 DCP_24_detect = X24_DCP_LOD_0_2, BP_3_detect = BP_3_LOD_0_4) %>%   
+          mutate_at(vars(10:13), ~ifelse(is.na(.), 0, 1))
+
+ppp = inner_join(mn_pht, phenol, by = "SID") %>% dplyr::select(SID, MEHHP:MEP, BP_3:BPA, everything(), -sg)
+```
+
+## Distributions \& Dectection
+
+**1. Detection**
+
+```{r}
+lod <- ppp %>% 
+  dplyr::select(grep("detect", colnames(.))) %>%
+  gather(chem, level) %>% 
+  mutate(level = ifelse(level > 1, 0, level)) %>% 
+  group_by(chem, level) %>% 
+  summarize(n = n()) %>% 
+  spread(level, n) %>% 
+  mutate_all(~replace_na(., 0))
+# Number of obs with each flag for each pht
+# 14 bc 3 detected 100%
+
+detected <- lod %>% 
+  mutate(Prop_Detected = `0`/(`1` + `0`),
+         `% <LOD` = 1 - Prop_Detected) %>%
+  ungroup() %>% 
+  dplyr::select(Chemical = chem, `% <LOD`) %>% 
+  mutate(Chemical = str_remove(Chemical, "_detect")) %>% 
+  rbind(., tibble(Chemical = "M_PB",   `% <LOD` = 0)) %>% 
+  rbind(., tibble(Chemical = "P_PB",   `% <LOD` = 0)) %>% 
+  rbind(., tibble(Chemical = "DCP_25", `% <LOD` = 0))
+```
+
+**2. Concentrations**
+
+```{r}
+conc = ppp %>% dplyr::select(2:18) %>% 
+  pivot_longer(MEHHP:BPA,
+               names_to = "Chemical") %>% 
+  group_by(Chemical) %>% 
+  summarise(Mean = mean(value, na.rm = TRUE),
+            Stdev = sd(value, na.rm = TRUE),
+            Min = min(value, na.rm = TRUE),
+            qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),
+            Max = max(value, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = "prob",
+              values_from = "qs") %>% 
+  dplyr::select(Chemical:Min, Q25:Q75, Max)
+```
+
+```{r}
+ppp_table <- left_join(detected, conc, by = c("Chemical")) %>%
+  mutate_if(is.numeric, round, digits = 2)
+
+ppp_table  %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
+
+#xtable(pht_conc)
+```
+
+```{r}
+ppp_conc = ppp %>% dplyr::select(2:18)
+#write_csv(ppp_conc, file = "./Data/ppp_conc.csv")
+```
+
+## Correlation
+
+```{r}
+# Get lower triangle of the correlation matrix
+get_lower_tri<-function(x){
+  x[upper.tri(x)] <- NA
+  return(x)
+}
+
+cormat <- get_lower_tri(round(cor(ppp_conc, use = "complete.obs", method = c("spearman")),2))
+
+melted_cormat <- melt(cormat) %>% 
+  rename(Correlation = value) %>% 
+  mutate(Var1 = str_replace(Var1, "_", "-"),
+    Var1 = fct_inorder(Var1),
+    Var2 = str_replace(Var2, "_", "-"),
+    Var2 = fct_inorder(Var2))
+
+cool = rainbow(100, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
+warm = rainbow(100, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
+cols = c(rev(cool), rev(warm))
+
+#pdf("./Figures/ppp_corr.pdf")
+ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
+  geom_tile(aes(fill = Correlation), color = "white") + 
+  scale_fill_gradientn(colors=cols, limits = c(-1,1),
+                       na.value = "grey80") +
+  labs(x = "", y = "", title = "") + 
+  theme_test(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 10),
+        legend.position = "bottom")
+#dev.off()
+```
+
+## Demographics
+
+```{r}
+ppp_current = ppp %>% mutate(Subsample = "Study Population") %>% 
+              left_join(., mn_demo, by = "SID") %>% 
+              dplyr::select(SID, 33:42)
+
+whole = mn_demo %>% 
+        mutate(Subsample = "Entire Cohort")
+
+demo =  bind_rows(ppp_current, whole) %>% 
+        mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
+        dplyr::select(-SID) %>% 
+        rename(Ethnicity = ETH,
+               `Maternal education` = M_EDU,
+               `Marital status` = MARITAL_STATUS,
+               `Child sex` = SEX,
+               `HOME scale` = HOME_SCORE,
+               `Maternal IQ` = M_IQ,
+               `Maternal age at delivery` = M_AGE,
+               `Prenatal alcohol consumption` = ALCOHOL)
+
+demo %>% tbl_summary(by = Subsample) %>% add_p() 
+
+# demo %>% tbl_summary(by = Subsample) %>% add_p()  %>%
+#  as_hux_table() %>% huxtable::to_latex()
+```
+
