@@ -1,0 +1,204 @@
+---
+title: "Nonlinear fit"
+subtitle: "Phthalates & phenols in M&N cohort"
+author: "Lizzy Gibson"
+date: "3/7/2021"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_depth: 2
+    code_folding: 'hide'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, cache=TRUE, autodep=TRUE, fig.align='center')
+options(scipen = 999)
+library(haven)
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(broom)
+library(tableone)
+library(xtable)
+library(GGally)
+library(gtsummary)
+library(huxtable)
+library(broom)
+library(R.matlab)
+library(MNdata) # Local package
+
+library(mgcv)
+library(splines)
+
+source(here::here("/Users/lizzy/BN2MF/functions/fig_set.R"))
+```
+
+## M&N Data
+
+* 5 phenols  
+* 3 parabens  
+* 9 phthalates  
+
+```{r, read}
+predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
+iq = mn_outcome %>% dplyr::select(SID, WISC = WSC_CSFS_84)
+mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
+# 32 without WISC
+
+ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
+mn_all = bind_cols(mn_dat, ewa)
+```
+
+```{r}
+get_output = function(fit) {
+              tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
+              dplyr::select(-statistic, -std.error) %>% 
+              bind_cols(., glance(fit) %>% rename(model.p.value = p.value)) %>% 
+              dplyr::select(-c(sigma:statistic, df:df.residual, r.squared))
+            }
+```
+
+## Unadjusted
+
+### P2
+
+#### Squared term
+
+```{r}
+fit_square2 <- lm(WISC ~ P2 + I(P2^2), data = mn_all)
+fit_lin2 <- lm(WISC ~ P2, data = mn_all)
+
+get_output(fit_square2)
+get_output(fit_lin2)
+
+anova(fit_square2, fit_lin2)
+
+termplot(fit_square2)
+termplot(fit_lin2)
+
+```
+
+#### Natural spline
+
+```{r}
+fit_nat2 <- lm(WISC ~ ns(P2, df = 2), data = mn_all)
+
+get_output(fit_nat2)
+termplot(fit_nat2, se = TRUE)
+```
+
+#### Penalized spline
+
+```{r}
+fit_ps2 <- gam(WISC ~ s(P2), data = mn_all)
+
+summary(fit_ps2)
+fit_ps2$sp
+plot(fit_ps2)
+```
+
+### P1
+
+#### Squared term
+
+```{r}
+fit_square1 <- lm(WISC ~ P1 + I(P1^2), data = mn_all)
+fit_lin1 <- lm(WISC ~ P1, data = mn_all)
+
+get_output(fit_square1)
+get_output(fit_lin1)
+
+anova(fit_square1, fit_lin1)
+```
+
+#### Natural spline
+
+```{r}
+fit_nat1 <- lm(WISC ~ ns(P1, df = 4), data = mn_all)
+
+get_output(fit_nat1)
+termplot(fit_nat1, se = TRUE)
+```
+
+#### Penalized spline
+
+```{r}
+fit_ps1 <- gam(WISC ~ s(P1), data = mn_all)
+
+summary(fit_ps1)
+```
+
+## Adjusted
+
+### P2
+
+#### Squared term
+
+```{r}
+fit_square2a <- lm(WISC ~ P2 + I(P2^2) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn_all)
+fit_lin2a <- lm(WISC ~ P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX , data = mn_all)
+
+get_output(fit_square2a)
+get_output(fit_lin2a)
+
+anova(fit_square2a, fit_lin2a)
+
+termplot(fit_square2a)
+termplot(fit_lin2a)
+```
+
+#### Natural spline
+
+```{r}
+fit_nat2a <- lm(WISC ~ ns(P2, df = 2) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn_all)
+
+get_output(fit_nat2a)
+termplot(fit_nat2a, se = TRUE)
+```
+
+#### Penalized spline
+
+```{r}
+fit_ps2a <- gam(WISC ~ s(P2) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX , data = mn_all)
+
+summary(fit_ps2a)
+fit_ps2a$sp
+plot(fit_ps2a)
+```
+
+### P1
+
+#### Squared term
+
+```{r}
+fit_square1a <- lm(WISC ~ P1 + I(P1^2) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX , data = mn_all)
+fit_lin1a <- lm(WISC ~ P1 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX , data = mn_all)
+
+get_output(fit_square1a)
+get_output(fit_lin1a)
+
+anova(fit_square1a, fit_lin1a)
+```
+
+#### Natural spline
+
+```{r}
+fit_nat1a <- lm(WISC ~ ns(P1, df = 2) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX , data = mn_all)
+
+get_output(fit_nat1a)
+termplot(fit_nat1a, se = TRUE)
+```
+
+#### Penalized spline
+
+```{r}
+fit_ps1a <- gam(WISC ~ s(P1) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX , data = mn_all)
+
+summary(fit_ps1a)
+```
+
+
+
+
+
