@@ -157,109 +157,37 @@ return(list(stats=stats, fit=fit))
 #Create lists of exposures and outcomes
 # WISC is the outcome here
 
-#Create lists of exposures and outcomes
-# chemicals are exposure here
-chem_pat = names(mn_all)[c(2:18,29:30)]
-
 # demographics and chemicals and patterns are exposures
-demo_chem_pat = names(mn_all)[c(2:27, 29:30)]
+demo = names(mn_demo)[2:10]
 
-exp_wisc_models = tibble()
+demo_wisc_models = tibble()
 #loop through lm for each exposure/outcome combo
-for (j in 1:length(demo_chem_pat)) {
-  model_out <- regress_model("WISC", demo_chem_pat[j])$stats
-  exp_wisc_models = bind_rows(exp_wisc_models, model_out)
+for (j in 1:length(demo)) {
+  model_out <- regress_model("WISC", demo[j])$stats
+  demo_wisc_models = bind_rows(demo_wisc_models, model_out)
 }
 ```
 
-### Chemical, demo, and pattern predictors
+### Demographical predictors
 
 ```{r}
-exp_wisc_models %>% filter(p.value < 0.10)
-
-exp_wisc_models %>% filter(predictor %in% c("P1","P2"))
-```
-
-#### Residuals
-
-```{r, fig3, fig.height=3, fig.width = 9, results='hide'}
-#loop through lm residual plots
-for (j in 1:length(demo_chem_pat)) {
-  fit <- regress_model("WISC", demo_chem_pat[j])$fit
-  
-  #print(paste0("Predictor: ", demo_chem_pat[j]))
-  par(mfrow=c(1,4))
-  print(plot(fit, which=1, col=c("blue"), main=paste0("Predictor: ", demo_chem_pat[j])))
-  print(plot(fit, which=2, col=c("blue"), main=paste0("Predictor: ", demo_chem_pat[j])))
-  print(plot(fit, which=3, col=c("blue"), main=paste0("Predictor: ", demo_chem_pat[j])))
-  print(plot(fit, which=5, col=c("blue"), main=paste0("Predictor: ", demo_chem_pat[j])))
-}
-```
-
-### Logged chemicals and patterns
-
-```{r}
-regress_pred_log <- function(out, pred) {
-  
-fit <- lm(get(out) ~ log(get(pred)), data = mn_all)
-
-stats = tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
-  mutate(predictor = pred,
-         outcome = out) %>% 
-  dplyr::select(-statistic) %>% 
-  filter(term != "(Intercept)") %>% 
-  bind_cols(., glance(fit) %>% 
-  rename(model.p.value = p.value)) %>% 
-  dplyr::select(predictor, outcome, everything(),
-                -df.residual, -deviance, -logLik, -df, -statistic, -sigma, -term, -AIC, -BIC, -r.squared) 
-
-  return(list(stats=stats, fit=fit))
-
-}
-
-# WISC is outcome
-# chemicals/patterns are exposure
-
-wisc_exp_logged = tibble()
-#loop through lm for each exposure/outcome combo
-for (j in 1:length(chem_pat)) {
-  model_out <- regress_pred_log("WISC", chem_pat[j])$stats
-  wisc_exp_logged = bind_rows(wisc_exp_logged, model_out)
-  }
-
-wisc_exp_logged %>% filter(p.value < .10)
-wisc_exp_logged %>% filter(predictor %in% c("P1", "P2"))
-```
-
-#### Residuals
-
-```{r, fig7, fig.height=3, fig.width = 9, results='hide'}
-#loop through lm residual plots
-for (j in 1:length(chem_pat)) {
-  fit <- regress_pred_log("WISC", chem_pat[j])$fit
-  
-  par(mfrow=c(1,4))
-  print(plot(fit, which=1, col=c("blue"), main=paste0("Predictor: ", chem_pat[j])))
-  print(plot(fit, which=2, col=c("blue"), main=paste0("Predictor: ", chem_pat[j])))
-  print(plot(fit, which=3, col=c("blue"), main=paste0("Predictor: ", chem_pat[j])))
-  print(plot(fit, which=5, col=c("blue"), main=paste0("Predictor: ", chem_pat[j])))
-}
+demo_wisc_models %>% arrange(p.value)
 ```
 
 ## Predictors of exposure
 
 ```{r}
-# chemicals are outcome here
+# patterns are outcome here
+patterns = c("P1", "P2")
 
 # demographics are exposures
-demograph = names(mn_all)[19:27]
 
-ind_exp_models = tibble()
+dem_pat_models = tibble()
 #loop through lm for each exposure/outcome combo
-for (i in 1:length(chem_pat)) {
-  for (j in 1:length(demograph)) {
-  model_out <- regress_model(chem_pat[i], demograph[j])$stats
-  ind_exp_models = bind_rows(ind_exp_models, model_out)
+for (i in 1:length(patterns)) {
+  for (j in 1:length(demo)) {
+  model_out <- regress_model(patterns[i], demo[j])$stats
+  dem_pat_models = bind_rows(dem_pat_models, model_out)
   }
 }
 ```
@@ -267,7 +195,7 @@ for (i in 1:length(chem_pat)) {
 ### Demographic predictors
 
 ```{r}
-ind_exp_models[,1:10] %>% filter(p.value < 0.10) %>% arrange(desc(outcome))
+dem_pat_models %>% arrange(p.value)
 ```
 
 ### Logged outcome
@@ -384,5 +312,79 @@ tidy(fit_patterns) %>% bind_cols(., as_tibble(confint(fit_patterns))) %>%
   print(plot(fit_patterns, which=2, col=c("blue"), main="Mutually adjusted"))
   print(plot(fit_patterns, which=3, col=c("blue"), main="Mutually adjusted"))
   print(plot(fit_patterns, which=5, col=c("blue"), main="Mutually adjusted"))
+```
+
+
+
+## Other outcomes
+
+```{r}
+mn_other = left_join(mn_all, mn_bayley_wisc)
+outcomes = names(mn_bayley_wisc)[8:12]
+patterns = c("P1", "P2")
+
+regress_other <- function(out, pred) {
+
+fit <- lm(get(out) ~ get(pred) + I(get(pred)^2) + SEX + get(pred)*SEX +
+            M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn_other)
+
+stats <- tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
+  mutate(predictor = pred,
+         outcome = out) %>% 
+  slice(c(2:4,11)) %>% 
+  dplyr::select(-statistic, -std.error) 
+  # %>% 
+  # bind_cols(., glance(fit) %>% 
+  # rename(model.p.value = p.value)) %>% 
+  # dplyr::select(predictor, outcome, everything(),
+  #               -df.residual, -deviance, -logLik, -df, -statistic, 
+  #               -sigma, -AIC, -BIC, -r.squared)
+
+return(list(stats=stats, fit=fit))
+}
+
+other_outcomes = tibble()
+#loop through lm for each exposure/outcome combo
+for (i in 1:length(outcomes)) {
+for (j in 1:length(patterns)) {
+  model_out <- regress_other(outcomes[i], patterns[j])$stats
+  other_outcomes = bind_rows(other_outcomes, model_out)
+}
+}
+
+other_outcomes %>% arrange((p.value)) %>% print(n = 25)
+
+other_outcomes %>% filter(grepl("PR", outcome)) %>% arrange((p.value))
+```
+
+```{r}
+mn_other %>% 
+  dplyr::select(SID, P1, P2, SEX, WISC) %>% 
+  pivot_longer(P1:P2) %>% 
+  ggplot(aes(x = value, color = SEX, fill = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.5) +
+  geom_smooth(aes(y = WISC), method = "gam", formula = y ~ x + I(x^2)) +
+  geom_histogram(aes(x=value), position = "identity", alpha = 0.5) +
+  facet_wrap(.~name, scales = "free") +
+  theme(legend.position = "bottom")
+
+mn_other %>% 
+  dplyr::select(SID, P1, P2, SEX, WSC_CSPR_84) %>% 
+  pivot_longer(P1:P2) %>% 
+  ggplot(aes(x = value, color = SEX, fill = SEX)) +
+  geom_point(aes(y = WSC_CSPR_84), alpha=0.5) +
+  geom_smooth(aes(y = WSC_CSPR_84), method = "gam", formula = y ~ x + I(x^2)) +
+  geom_histogram(aes(x=value), position = "identity", alpha = 0.5) +
+  facet_wrap(.~name, scales = "free") +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+mn_female = mn %>% filter(SEX == "Female")
+
+fit <- lm(WSC_CSPR_84 ~ P2 + I(P2^2) + P1 +
+            M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn_female)
+
+get_output(fit)
 ```
 
