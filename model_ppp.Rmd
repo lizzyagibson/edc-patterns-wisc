@@ -197,6 +197,7 @@ fit_fs <- lm(WISC ~ P2 + SEX + P1 + SEX*P2 +
             M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn, 
             subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 
+summary(fit_fs)
 predFS <- predict(fit_fs)
 
 mn_subset = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ETH, ALCOHOL, M_EDU, 
@@ -413,6 +414,13 @@ fit3fa <- lm(WISC ~ P1 + P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS +
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 get_output(fit3fa)
 ```
+
+```{r}
+summary(lm(WISC ~ P1 + P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
+               HOME_SCORE, data = mn, x = TRUE,
+             subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) )))
+```
+
 
 ##### Male
 ```{r}
