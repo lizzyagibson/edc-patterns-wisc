@@ -22,6 +22,7 @@ parameters {
 }
 
 // The model to be estimated.
+//  With no prior in the model block, the effect is an improper prior on all real numbers. 
 model {
   // sigma ~ inv_gamma(0.001, 0.001); // prior on error
   // Cite: stat.columbia.edu/~gelman/research/published/taumain.pdf
@@ -32,7 +33,6 @@ model {
   // smaller nu, fatter tails
   // beta_c ~ normal(0,5); // student_t(1, 0, 2.5);
   //  beta_p ~ normal(0,5); // student_t(1, 0, 2.5);
-  //  With no prior in the model block, the effect is an improper prior on all real numbers. 
   
   for (n in 1:N) { // prior on data
     for (k in 1:K) {
