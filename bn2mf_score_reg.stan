@@ -26,7 +26,7 @@ parameters {
 model {
   // sigma ~ inv_gamma(0.001, 0.001); // prior on error
   // Cite: stat.columbia.edu/~gelman/research/published/taumain.pdf
-  alpha ~ normal(100, 15); // prior on alpha = IQ
+  // alpha ~ normal(100, 15); // prior on alpha = IQ
 
   // beta coefficient priors
   // student t parameters: degrees of freedom nu, location mu, and scale sigma
