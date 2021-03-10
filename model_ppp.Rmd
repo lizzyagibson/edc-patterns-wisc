@@ -44,8 +44,6 @@ theme_set(theme_bw(base_size = 20) +
                   legend.direction = "horizontal",
                   legend.title = element_blank(),
                   legend.position = "bottom"))
-                  #plot.margin = unit(c(5.5, 30, 50, 5.5), "points")) # top, then right, bottom and left. 
-
 
 options(
   ggplot2.discrete.color = pal_nejm()(3)[-1],
@@ -531,4 +529,5 @@ for (j in 1:length(models)) {
   print(plot(fit, which=5, col=c("blue"), main=paste0("Stratified models: ", sex)))
 }
 ```
+
 
