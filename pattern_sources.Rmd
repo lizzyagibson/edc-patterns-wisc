@@ -46,7 +46,8 @@ Put 2 BN2MF-identified patterns (continuous outcomes) into linear regression w/ 
 #function to take component and binary personal care product, regress, and output as tibble
 product_model <- function(V, product) {
 
-model <- lm(get(V) ~ get(product) + M_AGE + ETH + M_EDU, data = mn_scores)
+model <- lm(get(V) ~ get(product) #+ M_AGE + ETH + M_EDU
+            , data = mn_scores)
 
 betas_confint <- as.data.frame(model$coefficient[2]) %>% rownames_to_column() %>% 
   cbind(., as_tibble(confint(model))[2,]) %>%
@@ -92,10 +93,6 @@ models %>% arrange(pvalue)
 
 ```{r}
 ## Plot heatmap 
-cool = rainbow(100, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
-warm = rainbow(100, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
-cols = c(rev(cool), rev(warm))
-
 heat_gg = models %>% 
   mutate(sig = ifelse(pvalue < 0.05, "*", ""),
          product = fct_relevel(product, "Total Care", "Perfume", "Lotion", "Deodorant",
@@ -104,10 +101,11 @@ heat_gg = models %>%
                                "Creme Rinse", "Shampoo", "Hair Spray", "Sunscreen"),
          pattern = ifelse(pattern == "P1", "Phenols", "Phthalates"))
 
-#pdf("./Figures/source_heatmap.pdf", width = 4)
+#Zissou1 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#F21A00"),
+#pdf("./Figures/source_heatmap_unadj.pdf", width = 3)
 ggplot(data = heat_gg, aes(x = pattern, y = product)) + 
   geom_tile(aes(fill = beta)) + 
-  scale_fill_gradientn(colors=cols) +
+  scale_fill_gradient2(low = "#046C9A", mid = "white", high = "#F21A00") +
   geom_text(aes(label = sig), size = 10, color = "white", vjust = .8) +
   labs(x = "", y = "", fill = "Coefficient") + 
   theme_minimal(base_size = 20) +
@@ -120,18 +118,20 @@ ggplot(data = heat_gg, aes(x = pattern, y = product)) +
         plot.margin = margin(c(0, 0, 50, 0)))
 #dev.off()
 
-# heat <- models %>% select(beta, pattern, product) %>% 
+# heat <- models %>% select(beta, pattern, product) %>%
+#   filter(product != "Total Care") %>% 
 #   spread(pattern, beta) %>%
-#   select(-product) %>% 
+#   select(-product) %>%
 #   as.matrix()
 # 
-# row.names(heat) <- models %>% select(beta, pattern, product) %>% 
-#   spread(pattern, beta) %>% 
+# row.names(heat) <- models %>% select(beta, pattern, product) %>%
+#   filter(product != "Total Care") %>% 
+#   spread(pattern, beta) %>%
 #   select(product) %>% as.matrix(.)
 # 
-# heatmap.2(heat, key.xlab = "Beta Coefficients", 
+# heatmap.2(heat, key.xlab = "Beta Coefficients",
 #                                margins =c(4,8), keysize = 1.25,
-#          col = cols, density.info="none", trace="none", key.title = "")
+#          density.info="none", trace="none", key.title = "")
 ```
 
 
