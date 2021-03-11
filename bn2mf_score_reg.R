@@ -12,30 +12,32 @@ options(mc.cores = parallel::detectCores())
 
 # Data ####
 predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
-iq = mn_outcome %>% dplyr::select(SID, WISC = WSC_CSFS_84)
-mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
-# 32 without WISC
+iq = mn_outcome %>% dplyr::select(SID, WISC)
+mn = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
+# 29 without WISC
 
-summary(mn_outcome$WSC_CSFS_84)
-summary(mn_outcome$WSC_SSFS_84)
+summary(mn$WISC)
 
 e_wa <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 var_wa <- readMat(here::here("./Data/mn2_WA_var.mat"))[[1]] %>% as_tibble() %>% rename(varP2 = V1, varP1 = V2)
 
-bayes = bind_cols(mn_dat, e_wa, var_wa) %>% 
+summary(e_wa)
+summary(var_wa)
+
+bayes = bind_cols(mn, e_wa, var_wa) %>% 
         filter(SEX == "Female") %>% 
         filter(P2 < mean(P2) + 5*sd(P2)) %>% # removes two females
-        dplyr::select(-(2:18), -SMOKER_IN_HOME , -M_AGE, -SEX) %>% drop_na()
-bayes # 132 = n
+        dplyr::select(-(2:18), -SMOKER_IN_HOME , -ETH, -SEX) %>% drop_na()
+bayes # 133 = n
 
 # For stan model ####
 N = nrow(bayes)
 C = ncol(bayes) - 6
 K = 2
-x = bayes %>% dplyr::select(ETH:ALCOHOL)
-y = bayes$WISC
 ewa = bayes %>% dplyr::select(P2:P1)
 sd_ewa = bayes %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
+x = model.matrix(WISC ~ M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + M_AGE, data = bayes)[,-1]
+y = bayes$WISC
 
 # Run stan model ####
 female_data = list(N = N,
@@ -57,39 +59,9 @@ female_fit <- stan(
   )         
 toc()
 
-# Check model fit ####
-
 params = tibble(names = names(female_fit)) %>% 
   filter(grepl("(alpha|sigma|beta)", names)) %>% 
   as.matrix()
-
-# shinystan::launch_shinystan(female_fit)
-traceplot(female_fit, pars = params, inc_warmup = TRUE)
-
-# same as traceplots above
-# color_scheme_set("mix-blue-pink")
-# mcmc_trace(ext_fit, pars = params, n_warmup = 1000,
-#                 facet_args = list(nrow = 2, labeller = label_parsed))
-
-# check posterior
-lp_female = log_posterior(female_fit)
-#head(lp_female)
-#dim(lp_female)
-np_female <- nuts_params(female_fit)
-
-color_scheme_set("brightblue")
-mcmc_nuts_divergence(np_female, lp_female)
-
-# scatterplot
-# divergences will be colored in the plot (by default in red).
-# this indicate that something is wrong with the model and the results should not be trusted
-color_scheme_set("darkgray")
-mcmc_scatter(
-  as.matrix(female_fit),
-  pars = params[7:8],
-  np = nuts_params(female_fit),
-  np_style = scatter_style_np(div_color = "red", div_alpha = 0.8)
-)
 
 # Extract fit
 ext_fit <- extract(female_fit, inc_warmup = TRUE, permuted = FALSE)
@@ -118,6 +90,75 @@ samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
 #dim(y_pred_df[samp,])
 post_samp = y_pred_df[samp,]
 #dim(post_samp)
+
+# Summarize model ####
+
+# RMSE
+sqrt(mean((apply(y_pred, 3, median) - y)^2))
+
+# n_eff is a crude measure of effective sample size, 
+# Rhat is the potential scale reduction factor on split chains (at convergence Rhat=1).
+print(female_fit, c("lp__"))
+print(female_fit, params)
+
+# plot coefficients
+plot(female_fit, pars = params)
+
+# Plot pattern beta coefficient with uncertainty
+color_scheme_set("brightblue")
+mcmc_areas(female_fit,
+           pars = params[(length(params)-1):length(params)],
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                 "with medians and 95% intervals")
+
+# plot posterior prediction
+ppc_dens_overlay(y = as.vector(y),
+                 yrep = as.matrix(post_samp))
+
+# posterior pred by grouping variable
+as.matrix(post_samp) %>%
+  ppc_stat_grouped(y = as.vector(bayes$WISC),
+                   group = as.vector(bayes$M_EDU),
+                   stat = "median")
+
+# prediction
+color_scheme_set("brightblue")
+ppc_intervals(
+  y = as.vector(y),
+  yrep = as.matrix(post_samp),
+  x = as.vector(as.matrix(ewa[,1])),
+  prob = 0.5
+)
+
+# Check model fit ####
+
+# shinystan::launch_shinystan(female_fit)
+traceplot(female_fit, pars = params, inc_warmup = TRUE)
+
+# same as traceplots above
+# color_scheme_set("mix-blue-pink")
+# mcmc_trace(ext_fit, pars = params, n_warmup = 1000,
+#                 facet_args = list(nrow = 2, labeller = label_parsed))
+
+# check posterior
+lp_female = log_posterior(female_fit)
+#head(lp_female)
+#dim(lp_female)
+np_female <- nuts_params(female_fit)
+
+color_scheme_set("brightblue")
+mcmc_nuts_divergence(np_female, lp_female)
+
+# scatterplot
+# divergences will be colored in the plot (by default in red).
+# this indicate that something is wrong with the model and the results should not be trusted
+color_scheme_set("darkgray")
+mcmc_scatter(
+  as.matrix(female_fit),
+  pars = params[7:8],
+  np = nuts_params(female_fit),
+  np_style = scatter_style_np(div_color = "red", div_alpha = 0.8)
+)
 
 # error
 color_scheme_set("brightblue")
@@ -152,44 +193,4 @@ mcmc_neff(ratios_cp[names(ratios_cp) %in% params], size = 2)
 # iterations) and you want it to drop quickly to zero with increasing lag. Negative autocorrelation 
 # is possible and it is useful as it indicates fast convergence of sample mean towards true mean.
 mcmc_acf_bar(female_fit, pars = params, lags = 10)
-
-# Summarize model ####
-
-# RMSE
-sqrt(mean((apply(y_pred, 3, median) - y)^2))
-
-# mcse is Monte Carlo standard error, n_eff is a crude measure of effective sample size, 
-# Rhat is the potential scale reduction factor on split chains (at convergence Rhat=1).
-print(female_fit, c("lp__"))
-print(female_fit, params)
-
-# plot coefficients
-plot(female_fit, pars = params)
-
-# Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(female_fit,
-           pars = params[(length(params)-1):length(params)],
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                 "with medians and 95% intervals")
-
-# plot posterior prediction
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(post_samp))
-
-# posterior pred by grouping variable
-as.matrix(post_samp) %>%
-  ppc_stat_grouped(y = as.vector(bayes$WISC),
-                   group = as.vector(bayes$M_EDU),
-                   stat = "median")
-
-# prediction
-color_scheme_set("brightblue")
-ppc_intervals(
-  y = as.vector(y),
-  yrep = as.matrix(post_samp),
-  x = as.vector(as.matrix(ewa[,1])),
-  prob = 0.5
-)
-
 
