@@ -20,8 +20,16 @@ parameters {
   real beta_int;      // coefficient for interaction
   real beta_sex;      // coefficient for sex
   
-  vector[K] beta_p;        // coefficients for patterns
-  matrix<lower=0>[N,K] WA; // pattern score with uncertainty
+  vector[K] beta_p;         // coefficients for patterns
+  matrix<lower=0>[N,K] WA;  // pattern score with uncertainty
+}
+
+// interaction term here
+transformed parameters {
+    vector<lower=0>[N] P1 = WA[,1] ;
+    vector<lower=0>[N] inter; // pattern score * sex
+    inter = P1 .* sex;
+
 }
 
 // The model to be estimated.
@@ -43,13 +51,14 @@ model {
       WA[n,k] ~ normal(ewa[n,k], sd_ewa[n,k]);
     }}
   
-  y ~ normal(((WA * beta_p) + (sex .* WA[,1] * beta_int) + (x * beta_c) + alpha), sigma);  // likelihood
+  y ~ normal(((WA * beta_p) + (inter * beta_int) + 
+              (sex * beta_sex) + (x * beta_c) + alpha), sigma);  // likelihood
 
 }
 
 // to get predicted values
 generated quantities {
-  real y_tilde[N] = normal_rng(((WA * beta_p) + (sex .* WA[,1] * beta_int) + 
+  real y_tilde[N] = normal_rng(((WA * beta_p) + (inter * beta_int) + 
                                 (sex * beta_sex) + (x * beta_c) + alpha), sigma);
 }
 

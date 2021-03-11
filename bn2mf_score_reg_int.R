@@ -31,8 +31,8 @@ bayes # 286 = n
 N = nrow(bayes)
 C = ncol(bayes) - 6 - 1
 K = 2
-x = bayes %>% dplyr::select(ETH:ALCOHOL, -SEX)
-sex = bayes$SEX
+x = model.matrix(WISC ~ ETH + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL, data = bayes)[,-1]
+sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
 y = bayes$WISC
 ewa = bayes %>% dplyr::select(P2:P1)
 sd_ewa = bayes %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
