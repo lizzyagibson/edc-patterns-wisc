@@ -65,13 +65,15 @@ get_output = function(fit) {
 
 ```{r, read}
 predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
-iq = mn_outcome %>% dplyr::select(SID, WISC = WSC_CSFS_84)
+iq = mn_outcome %>% dplyr::select(SID, WISC)
 mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
-# 32 without WISC
 
 ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 
 mn = bind_cols(mn_dat, ewa)
+
+summary(mn$WISC)
+summary(mn$HOME_SCORE)
 ```
 
 ## Distributions
@@ -161,7 +163,7 @@ mn %>%
 
 ```{r}
 mn %>% 
-  filter(P2 < 30) %>% 
+  filter(P2 < mean(P2) +5*sd(P2)) %>% 
   dplyr::select(SID, P1, P2, SEX, WISC) %>% 
   ggplot(aes(x = P2, fill = SEX)) +
   geom_histogram(aes(x=P2), position = "identity", alpha = 0.5) +
@@ -174,8 +176,8 @@ mn %>%
 
 **All data**
 ```{r}
-fit_fs1 <- lm(WISC ~ P2 + SEX + P1 + SEX*P2 +  
-            M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit_fs1 <- lm(WISC ~ P2 + SEX + P1 + SEX*P2 + M_AGE + 
+            M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
 
 predFS1 <- as_tibble(predict(fit_fs1, std.error = TRUE))
 
@@ -193,14 +195,14 @@ bind_cols(mn_subset1, predFS = predFS1$value) %>%
 
 **Removed extreme values**
 ```{r}
-fit_fs <- lm(WISC ~ P2 + SEX + P1 + SEX*P2 +  
-            M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn, 
+fit_fs <- lm(WISC ~ P2 + SEX + P1 + SEX*P2 + M_AGE + 
+            M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn, 
             subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 
 summary(fit_fs)
 predFS <- predict(fit_fs)
 
-mn_subset = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ETH, ALCOHOL, M_EDU, 
+mn_subset = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ALCOHOL, M_EDU, 
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
             filter(P2 < mean(mn$P2) + 5*sd(mn$P2) )
 
@@ -233,8 +235,8 @@ get_output(fit3)
 ### Adjusted
 
 ```{r}
-fit1a <- lm(WISC ~ P1 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
-fit2a <- lm(WISC ~ P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit1a <- lm(WISC ~ P1      + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit2a <- lm(WISC ~ P2      + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
 fit3a <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
 
 #get_output(fit1a)
@@ -260,9 +262,12 @@ fit_ps2 <- gam(WISC ~ s(P2) + P1, data = mn)
 #### Adjusted
 
 ```{r}
-fit1psa <- gam(WISC ~ s(P1) + M_IQ  + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
-fit2psa <- gam(WISC ~ s(P2) + M_IQ  + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
-fit3psa <- gam(WISC ~ P1 + s(P2) + M_IQ  + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit1psa <- gam(WISC ~ s(P1)      + M_IQ + M_AGE + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, 
+               data = mn)
+fit2psa <- gam(WISC ~ s(P2)      + M_IQ + M_AGE + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, 
+               data = mn)
+fit3psa <- gam(WISC ~ P1 + s(P2) + M_IQ + M_AGE + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, 
+               data = mn)
 
 #summary(fit1psa)
 #summary(fit2psa)
@@ -286,12 +291,12 @@ fit2i <- gam(WISC ~ s(P2, by = SEX), data = mn)
 #### Adjusted
 
 ```{r}
-fit1ia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
-                MARITAL_STATUS + HOME_SCORE, data = mn)
-fit2ia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
-                MARITAL_STATUS + HOME_SCORE, data = mn)
-fit3ia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
-                MARITAL_STATUS + HOME_SCORE, data = mn)
+fit1ia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE, 
+              data = mn)
+fit2ia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE, 
+              data = mn)
+fit3ia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU +
+                MARITAL_STATUS + HOME_SCORE + M_AGE, data = mn)
 
 #summary(fit1ia)
 #summary(fit2ia)
@@ -316,11 +321,11 @@ fit2si <- gam(WISC ~ s(P2, by = SEX), data = mn, subset = (P2 < mean(mn$P2) + 5*
 #### Adjusted
 
 ```{r}
-fit1sia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
-                MARITAL_STATUS + HOME_SCORE, data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
-fit2sia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
-                MARITAL_STATUS + HOME_SCORE, data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
-fit3sia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
+fit1sia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE, 
+               data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
+fit2sia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE, 
+               data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
+fit3sia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU  + M_AGE + 
                 MARITAL_STATUS + HOME_SCORE, data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 
 #summary(fit1sia)
@@ -353,17 +358,17 @@ fit3li <- lm(WISC ~ P1 + P2 + SEX + SEX*P2 + SEX*P1, data = mn, x = TRUE,
 #### Adjusted
 
 ```{r}
-fit1lia <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit1lia <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE + 
               MARITAL_STATUS + HOME_SCORE, data = mn, x = TRUE,
              subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit1lia)
 
-fit2lia <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit2lia <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE + 
               MARITAL_STATUS + HOME_SCORE, data = mn, x = TRUE,
              subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit2lia)
 
-fit3lia <- lm(WISC ~ P1 + P2 + SEX*P2  + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU + 
+fit3lia <- lm(WISC ~ P1 + P2 + SEX*P2  + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE + 
                 MARITAL_STATUS + HOME_SCORE, data = mn, x = TRUE,
                subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 summary(fit3lia)
@@ -399,42 +404,41 @@ get_output(fit2m)
 
 ##### Female
 ```{r}
-fit1fa <- lm(WISC ~ P1 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + 
+fit1fa <- lm(WISC ~ P1 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS  + M_AGE + 
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit1fa)
 
-fit2fa <- lm(WISC ~ P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + 
+fit2fa <- lm(WISC ~ P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit2fa)
 
-fit3fa <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + 
+fit3fa <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS +
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 summary(fit3fa)
 ```
 
 ```{r}
-summary(lm(WISC ~ P1 + P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
+summary(lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) )))
 ```
 
-
 ##### Male
 ```{r}
-fit1ma <- lm(WISC ~ P1 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + 
+fit1ma <- lm(WISC ~ P1 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE +
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Male" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit1ma)
 
-fit2ma <- lm(WISC ~ P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + 
+fit2ma <- lm(WISC ~ P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Male" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit2ma)
 
-fit3ma <- lm(WISC ~ P1 + P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + 
+fit3ma <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Male" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 get_output(fit3ma)
@@ -476,7 +480,7 @@ main %>%
 ## Sensitity
 
 ```{r}
-fit_sense <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit_sense <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn)
 ps_predict = as_tibble(predict(fit_sense, se.fit = T))
 mn_subset = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ETH, ALCOHOL, M_EDU, 

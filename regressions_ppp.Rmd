@@ -42,12 +42,12 @@ source(here::here("/Users/lizzy/BN2MF/functions/fig_set.R"))
 
 ```{r, read}
 predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
-iq = mn_outcome %>% dplyr::select(SID, WISC = WSC_CSFS_84)
+iq = mn_outcome %>% dplyr::select(SID, WISC)
 mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
 # 32 without WISC
 
 ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
-mn_all = bind_cols(mn_dat, ewa)
+mn = bind_cols(mn_dat, ewa)
 ```
 
 ## Distributions
@@ -55,7 +55,7 @@ mn_all = bind_cols(mn_dat, ewa)
 ### Chemicals
 
 ```{r, fig1, fig.height=10, fig.width=12}
-mn_all %>% 
+mn %>% 
   pivot_longer(MEHHP:BPA) %>% 
   mutate(name = str_replace(name, "_", "-")) %>% 
   ggplot(aes(x = value)) +
@@ -71,7 +71,7 @@ mn_all %>%
 ### Patterns
 
 ```{r, fig2}
-mn_all %>% 
+mn %>% 
   pivot_longer(P1:P2) %>% 
   ggplot(aes(x = value)) +
   geom_histogram(aes(y = ..density..)) +
@@ -86,7 +86,7 @@ mn_all %>%
 #### Logged
 
 ```{r, fig2}
-mn_all %>% 
+mn %>% 
   pivot_longer(P1:P2) %>% 
   mutate(value = log(value)) %>% 
   ggplot(aes(x = value)) +
@@ -102,7 +102,7 @@ mn_all %>%
 ## Scatterplots
 
 ```{r}
-mn_all %>% 
+mn %>% 
   dplyr::select(SID, WISC, P1, P2) %>% 
   pivot_longer(P1:P2) %>% 
   ggplot(aes(x = value, y = WISC)) +
@@ -110,7 +110,7 @@ mn_all %>%
   geom_smooth() +
   facet_wrap(.~name, scales = "free") 
 
-mn_all %>% 
+mn %>% 
   dplyr::select(SID, WISC, P1, P2) %>% 
   pivot_longer(P1:P2) %>% 
   filter(value < 15) %>% 
@@ -123,7 +123,7 @@ mn_all %>%
 #### Logged
 
 ```{r, fig2}
-mn_all %>% 
+mn %>% 
   dplyr::select(SID, WISC, P1, P2) %>% 
   pivot_longer(P1:P2) %>% 
   mutate(value = log(value)) %>% 
@@ -139,7 +139,7 @@ mn_all %>%
 #function to take exposure and outcome, regress, and output as tibble
 regress_model <- function(out, pred) {
 
-fit <- lm(get(out) ~ get(pred), data = mn_all)
+fit <- lm(get(out) ~ get(pred), data = mn)
 
 stats <- tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
   mutate(predictor = pred,
@@ -173,7 +173,7 @@ for (j in 1:length(demo)) {
 ```{r}
 demo_wisc_models %>% arrange(p.value)
 
-summary(lm(WISC ~ HOME_SCORE + M_IQ + ALCOHOL + ETH + M_EDU +SEX+M_AGE+SMOKER_IN_HOME+MARITAL_STATUS, data = mn_all))
+summary(lm(WISC ~ HOME_SCORE + M_IQ + ALCOHOL + ETH + M_EDU +SEX+M_AGE+SMOKER_IN_HOME+MARITAL_STATUS, data = mn))
 ```
 
 ## Predictors of exposure
@@ -205,7 +205,7 @@ dem_pat_models %>% arrange(p.value)
 ```{r}
 regress_outcome_log <- function(out, pred) {
   
-fit <- lm(log(get(out)) ~ get(pred), data = mn_all)
+fit <- lm(log(get(out)) ~ get(pred), data = mn)
 
 stats <- tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
   mutate(predictor = pred,
@@ -242,7 +242,7 @@ regress_health <- function(pred) {
   
 fit <- lm(WISC ~ log(get(pred)) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX 
           # + SMOKER_IN_HOME + M_AGE
-          , data = mn_all)
+          , data = mn)
 
 stats <- tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
   mutate(predictor = pred,
@@ -296,7 +296,7 @@ fit_patterns <- lm(WISC ~ P1 + P2
                           #log(P1) + log(P2)
                           + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX 
           + SMOKER_IN_HOME + M_AGE
-          , data = mn_all)
+          , data = mn)
 
 tidy(fit_patterns) %>% bind_cols(., as_tibble(confint(fit_patterns))) %>% 
   dplyr::select(-statistic) %>%
@@ -321,7 +321,7 @@ tidy(fit_patterns) %>% bind_cols(., as_tibble(confint(fit_patterns))) %>%
 ## Other outcomes
 
 ```{r}
-mn_other = left_join(mn_all, mn_bayley_wisc)
+mn_other = left_join(mn, mn_bayley_wisc)
 outcomes = names(mn_bayley_wisc)[8:12]
 patterns = c("P1", "P2")
 
