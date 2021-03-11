@@ -233,9 +233,9 @@ get_output(fit3)
 ### Adjusted
 
 ```{r}
-fit1a <- lm(WISC ~ P1 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn)
-fit2a <- lm(WISC ~ P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn)
-fit3a <- lm(WISC ~ P1 + P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn)
+fit1a <- lm(WISC ~ P1 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit2a <- lm(WISC ~ P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit3a <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE, data = mn)
 
 #get_output(fit1a)
 #get_output(fit2a)
@@ -260,9 +260,9 @@ fit_ps2 <- gam(WISC ~ s(P2) + P1, data = mn)
 #### Adjusted
 
 ```{r}
-fit1psa <- gam(WISC ~ s(P1) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn)
-fit2psa <- gam(WISC ~ s(P2) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn)
-fit3psa <- gam(WISC ~ P1 + s(P2) + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + SEX, data = mn)
+fit1psa <- gam(WISC ~ s(P1) + M_IQ  + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit2psa <- gam(WISC ~ s(P2) + M_IQ  + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
+fit3psa <- gam(WISC ~ P1 + s(P2) + M_IQ  + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
 
 #summary(fit1psa)
 #summary(fit2psa)
@@ -286,11 +286,11 @@ fit2i <- gam(WISC ~ s(P2, by = SEX), data = mn)
 #### Adjusted
 
 ```{r}
-fit1ia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit1ia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn)
-fit2ia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit2ia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn)
-fit3ia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit3ia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn)
 
 #summary(fit1ia)
@@ -316,11 +316,11 @@ fit2si <- gam(WISC ~ s(P2, by = SEX), data = mn, subset = (P2 < mean(mn$P2) + 5*
 #### Adjusted
 
 ```{r}
-fit1sia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit1sia <- gam(WISC ~ s(P1, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
-fit2sia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit2sia <- gam(WISC ~ s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
-fit3sia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit3sia <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn, subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 
 #summary(fit1sia)
@@ -363,10 +363,10 @@ fit2lia <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ETH + ALCOHOL + M_EDU +
              subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit2lia)
 
-fit3lia <- lm(WISC ~ P1 + P2 + SEX*P2  + SEX*P1 + SEX + M_IQ + ETH + ALCOHOL + M_EDU + 
+fit3lia <- lm(WISC ~ P1 + P2 + SEX*P2  + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn, x = TRUE,
                subset = (P2 < mean(mn$P2) + 5*sd(mn$P2) ))
-get_output(fit3lia)
+summary(fit3lia)
 ```
 
 ### Stratify models
@@ -409,10 +409,10 @@ fit2fa <- lm(WISC ~ P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS +
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 #get_output(fit2fa)
 
-fit3fa <- lm(WISC ~ P1 + P2 + M_IQ + ETH + ALCOHOL + M_EDU + MARITAL_STATUS + 
+fit3fa <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + 
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
-get_output(fit3fa)
+summary(fit3fa)
 ```
 
 ```{r}

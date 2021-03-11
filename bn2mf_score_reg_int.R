@@ -18,6 +18,7 @@ mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, b
 
 summary(mn_outcome$WSC_CSFS_84)
 summary(mn_outcome$WSC_SSFS_84)
+summary(mn_demo$M_IQ)
 
 e_wa <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 var_wa <- readMat(here::here("./Data/mn2_WA_var.mat"))[[1]] %>% as_tibble() %>% rename(varP2 = V1, varP1 = V2)

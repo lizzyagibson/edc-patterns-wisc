@@ -24,6 +24,7 @@ library(GGally)
 library(gtsummary)
 library(huxtable)
 library(rcompanion)
+library(R.matlab)
 library(MNdata) # Local package
 ```
 
@@ -241,7 +242,7 @@ cor(cont,use = "complete.obs")
 
 ```{r}
 chem_pat %>% filter(P2 > 31)
-extreme = mn %>% filter(P2 > 31) %>%
+extreme = chem_pat %>% filter(P2 > 31) %>%
   t() %>% as.data.frame() %>% rownames_to_column(var = "Chemical")
 ```
 

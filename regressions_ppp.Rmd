@@ -172,6 +172,8 @@ for (j in 1:length(demo)) {
 
 ```{r}
 demo_wisc_models %>% arrange(p.value)
+
+summary(lm(WISC ~ HOME_SCORE + M_IQ + ALCOHOL + ETH + M_EDU +SEX+M_AGE+SMOKER_IN_HOME+MARITAL_STATUS, data = mn_all))
 ```
 
 ## Predictors of exposure
