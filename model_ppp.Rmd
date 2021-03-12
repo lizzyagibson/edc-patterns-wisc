@@ -64,13 +64,10 @@ get_output = function(fit) {
 * 9 phthalates  
 
 ```{r, read}
-predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
-iq = mn_outcome %>% dplyr::select(SID, WISC)
-mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
-
 ewa <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
+mn = bind_cols(mn_ppp, ewa)
 
-mn = bind_cols(mn_dat, ewa)
+mn %>% slice(319)
 
 summary(mn$WISC)
 summary(mn$HOME_SCORE)
@@ -182,7 +179,7 @@ summary(fit_fs1)
 
 predFS1 <- as_tibble(predict(fit_fs1, std.error = TRUE))
 
-mn_subset1 = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ETH, ALCOHOL, M_EDU, 
+mn_subset1 = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ALCOHOL, M_EDU, 
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na()
 
 bind_cols(mn_subset1, predFS = predFS1$value) %>% 
@@ -419,6 +416,7 @@ fit3fa <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS +
                HOME_SCORE, data = mn, x = TRUE,
              subset = (SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ))
 summary(fit3fa)
+get_output(fit3fa)
 ```
 
 ```{r}
@@ -451,11 +449,11 @@ get_output(fit3ma)
 pred_m = predict(fit3ma, se.fit = TRUE)
 pred_f = predict(fit3fa, se.fit = TRUE)
 
-mn_subsetm = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ETH, ALCOHOL, M_EDU, 
+mn_subsetm = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ALCOHOL, M_EDU, 
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
               filter(SEX == "Male" & P2 < mean(mn$P2) + 5*sd(mn$P2) ) %>% 
               mutate(model = "Main Model")
-mn_subsetf = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ETH, ALCOHOL, M_EDU, 
+mn_subsetf = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ALCOHOL, M_EDU, 
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
               filter(SEX == "Female" & P2 < mean(mn$P2) + 5*sd(mn$P2) ) %>% 
               mutate(model = "Main Model")
@@ -464,7 +462,7 @@ male_pred = bind_cols(mn_subsetm, pred = pred_m$fit, pred_se = pred_m$se.fit)
 female_pred = bind_cols(mn_subsetf, pred = pred_f$fit, pred_se = pred_f$se.fit)
 
 main = bind_rows(male_pred, female_pred) %>% 
-  dplyr::select(-c(M_IQ, ETH, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE)) %>% 
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE)) %>% 
   pivot_longer(P1:P2)
 
 main %>% 
@@ -484,14 +482,14 @@ main %>%
 fit_sense <- gam(WISC ~ P1 + s(P2, by = SEX) + M_IQ + ALCOHOL + M_EDU + 
                 MARITAL_STATUS + HOME_SCORE, data = mn)
 ps_predict = as_tibble(predict(fit_sense, se.fit = T))
-mn_subset = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ETH, ALCOHOL, M_EDU, 
+mn_subset = mn %>% dplyr::select(WISC, P1, P2, SEX, M_IQ, ALCOHOL, M_EDU, 
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na()
 
 spline_pred = bind_cols(mn_subset, pred = ps_predict$fit, pred_se = ps_predict$se.fit) %>% 
               mutate(model = "Penalized Spline")
 
 sense_all = bind_rows(spline_pred, male_pred, female_pred) %>% 
-  dplyr::select(-c(M_IQ, ETH, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE))
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE))
 
 sense_plot = sense_all %>% 
   pivot_longer(P1:P2)

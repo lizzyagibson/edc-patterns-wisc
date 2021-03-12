@@ -41,13 +41,8 @@ source(here::here("/Users/lizzy/BN2MF/functions/fig_set.R"))
 * 9 phthalates  
 
 ```{r, read}
-predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
-iq = mn_outcome %>% dplyr::select(SID, WISC)
-mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
-# 32 without WISC
-
 ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
-mn = bind_cols(mn_dat, ewa)
+mn = bind_cols(mn_ppp, ewa)
 ```
 
 ## Distributions

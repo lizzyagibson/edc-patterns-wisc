@@ -34,28 +34,21 @@ library(MNdata) # Local package
 * 3 parabens  
 * 9 phthalates  
 
-```{r pcb}
-phenol <- mn_phenol %>% drop_na(BP_3:BPA) %>% 
-          rename(B_PB_detect = B_PB_LOD_0_2, TCS_detect = TCS_LOD_2_3,
-                 DCP_24_detect = X24_DCP_LOD_0_2, BP_3_detect = BP_3_LOD_0_4) %>%   
-          mutate_at(vars(10:13), ~ifelse(is.na(.), 0, 1))
-
-ppp = inner_join(mn_pht, phenol, by = "SID") %>% dplyr::select(SID, MEHHP:MEP, BP_3:BPA, everything(), -sg)
-```
-
 ## Demographics
 
 ```{r}
-iq = mn_outcome %>% dplyr::select(SID, WISC = WSC_CSFS_84)
-
-ppp_current = ppp %>% mutate(Subsample = "Study Population") %>% 
-              left_join(., mn_demo, by = "SID") %>% 
-              left_join(., iq, by = "SID") %>% 
-              dplyr::select(SID, 33:43)
+ppp_current = ppp_cov %>% mutate(Subsample = "Study Population")
+summary(ppp_current$WISC)
+summary(ppp_current$HOME_SCORE)
+summary(ppp_current$M_IQ)
 
 whole = mn_demo %>% 
-        left_join(., iq, by = "SID") %>% 
+        left_join(., mn_outcome, by = "SID") %>% 
+        dplyr::select(-WSC_SSFS_84, -WSC_SSFS_108) %>% 
         mutate(Subsample = "Entire Cohort")
+summary(whole$M_IQ)
+summary(whole$HOME_SCORE)
+summary(whole$WISC)
 
 demo =  bind_rows(ppp_current, whole) %>% 
         mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
@@ -69,6 +62,7 @@ demo =  bind_rows(ppp_current, whole) %>%
                `Maternal age at delivery` = M_AGE,
                `Prenatal alcohol consumption` = ALCOHOL,
                `Smoker in home` = SMOKER_IN_HOME)
+summary(demo$`Maternal IQ`)
 
 demo %>% tbl_summary(by = Subsample,
                      statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% add_p() 
@@ -81,7 +75,11 @@ demo %>% tbl_summary(by = Subsample,
 ## Distributions \& Dectection
 
 ```{r}
-lod <- ppp %>% 
+lod <- mn_phenol %>% drop_na(BP_3:BPA) %>% 
+          rename(B_PB_detect = B_PB_LOD_0_2, TCS_detect = TCS_LOD_2_3, 
+                DCP_24_detect = X24_DCP_LOD_0_2, BP_3_detect = BP_3_LOD_0_4) %>%   
+          mutate_at(vars(10:13), ~ifelse(is.na(.), 0, 1)) %>% 
+          inner_join(., mn_pht, by = "SID") %>% 
   dplyr::select(grep("detect", colnames(.))) %>%
   gather(chem, level) %>% 
   mutate(level = ifelse(level > 1, 0, level)) %>% 
@@ -102,7 +100,7 @@ detected <- lod %>%
   rbind(., tibble(Chemical = "P_PB",   `% <LOD` = 0)) %>% 
   rbind(., tibble(Chemical = "DCP_25", `% <LOD` = 0))
 
-conc = ppp %>% dplyr::select(2:18) %>% 
+conc = mn_ppp %>% 
   pivot_longer(MEHHP:BPA,
                names_to = "Chemical") %>% 
   group_by(Chemical) %>% 
@@ -121,9 +119,6 @@ ppp_table <- left_join(detected, conc, by = c("Chemical")) %>%
 ppp_table  %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
 
 #xtable(pht_conc)
-
-ppp_conc = ppp %>% dplyr::select(2:18)
-#write_csv(ppp_conc, file = "./Data/ppp_conc.csv")
 ```
 
 ## Correlation
@@ -142,7 +137,7 @@ get_lower_tri<-function(x){
   return(x)
 }
 
-cormat <- get_lower_tri(round(cor(ppp_conc, use = "complete.obs", 
+cormat <- get_lower_tri(round(cor(mn_ppp[,-1], use = "complete.obs", 
                                   method = c("spearman")),2))[2:17, 1:16]
 
 melted_cormat <- melt(cormat) %>% 
@@ -155,12 +150,14 @@ melted_cormat <- melt(cormat) %>%
 cool = rainbow(100, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
 warm = rainbow(100, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
 cols = c(rev(cool), rev(warm))
+# Zissou1 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#F21A00"),
 
 #pdf("./Figures/ppp_corr.pdf")
 ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
   geom_tile(aes(fill = Correlation), color = "white") + 
-  scale_fill_gradientn(colors=cols, limits = c(-1,1),
-                       na.value = "grey80") +
+  scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00") +
+  #scale_fill_gradientn(colors=cols, limits = c(-1,1),
+  #                     na.value = "grey80") +
   labs(x = "", y = "", title = "") + 
   theme_test(base_size = 20) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
@@ -172,10 +169,9 @@ ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) +
 ### Chemicals with patterns
 
 ```{r}
-mn_dat = ppp %>% left_join(., ppp_current, by = "SID") %>% distinct()
 ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 
-chem_pat = bind_cols(mn_dat, ewa) %>% dplyr::select(c(2:18,44:45))
+chem_pat = bind_cols(mn_ppp, ewa) %>% dplyr::select(-SID) %>% as.matrix()
 
 cormat_p <- get_lower_tri(round(cor(chem_pat, use = "complete.obs", 
                                   method = c("spearman")),2))[18:19,]
@@ -186,12 +182,13 @@ melted_cormat_p <- melt(cormat_p) %>%
     Var1 = fct_inorder(Var1),
     Var2 = str_replace(Var2, "_", "-"),
     Var2 = fct_inorder(Var2)) %>% 
-  filter(Var2 != "P1")
+  filter(!(Var2 %in% c("P2","P1")))
 
 ggplot(data = melted_cormat_p, aes(x = Var1, y = Var2)) + 
   geom_tile(aes(fill = Correlation), color = "white") + 
-  scale_fill_gradientn(colors=cols, limits = c(-1,1),
-                       na.value = "grey80") +
+  scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00") +
+  #scale_fill_gradientn(colors=cols, limits = c(-1,1),
+  #                     na.value = "grey80") +
   labs(x = "", y = "", title = "") + 
   theme_test(base_size = 20) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
@@ -241,25 +238,30 @@ cor(cont,use = "complete.obs")
 ## Extreme values
 
 ```{r}
-chem_pat %>% filter(P2 > 31)
-extreme = chem_pat %>% filter(P2 > 31) %>%
-  t() %>% as.data.frame() %>% rownames_to_column(var = "Chemical")
+bind_cols(mn_ppp, ewa) %>% arrange(desc(P2)) %>% select(SID, P1, P2, everything())
+  
+extreme = bind_cols(mn_ppp, ewa) %>% filter(P2 > 30) %>%
+  t() %>% as.data.frame() %>% rownames_to_column(var = "Chemical") %>% 
+  mutate_at(vars(2:4), as.numeric) %>% 
+  filter(Chemical != "SID")
 ```
 
 ```{r}
-ppp %>% dplyr::select(2:18) %>% 
+mn_ppp %>%
   pivot_longer(MEHHP:BPA,
                names_to = "Chemical") %>% 
   group_by(Chemical) %>% 
   summarise(qs = quantile(value, c(0.5, 0.75, 0.90), na.rm = TRUE), prob = c("Median", "Q75", "Q90"),
             Max = max(value, na.rm = TRUE)) %>% 
+  ungroup(.) %>% 
   pivot_wider(names_from = "prob",
               values_from = "qs") %>% 
+  dplyr::select(Chemical, Median:Q90, Max) %>% 
   left_join(., extreme)
 ```
 
 ```{r, figend, fig.height=10, fig.width=12}
-chem_pat %>% 
+mn_ppp %>%
   pivot_longer(MEHHP:BPA,
                names_to = "Chemical") %>% 
   left_join(., extreme) %>% 
@@ -270,6 +272,7 @@ chem_pat %>%
   geom_histogram(aes(y = ..density..), fill = "#0072B5", alpha=0.75) +
   geom_vline(aes(xintercept = V1), linetype = "dashed", color = "#E18727") + 
   geom_vline(aes(xintercept = V2), linetype = "dashed", color = "#20854E") + 
+  geom_vline(aes(xintercept = V3), linetype = "dashed", color = "#F21A00") + 
   facet_wrap(Chemical~., scales = "free") + 
   labs(y = "Density", x="") +
   theme(axis.text.y = element_blank(),

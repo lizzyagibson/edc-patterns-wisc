@@ -26,14 +26,11 @@ library(gplots)
 ## Read Data
 
 ```{r read}
-predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
 ewa <- readMat("./Data/mn2_EWA.mat")[[1]]  %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 
-mn_scores <- bind_cols(predictors, ewa) %>%  
+mn_scores <- bind_cols(mn_ppp, ewa) %>%  
   left_join(., mn_personal) %>% 
-  dplyr::select(-(2:18)) %>% 
-  left_join(., mn_demo) %>% 
-  mutate_at(vars(4:16), ~as.factor(ifelse(. == 1, "Yes", "No"))) # Recode 1 = Yes, 2 = No
+  mutate_at(vars(deodorant:creme_rinse), ~as.factor(ifelse(. == 1, "Yes", "No"))) # Recode 1 = Yes, 2 = No
 
 mn_scores %>% drop_na()
 ```
@@ -46,7 +43,7 @@ Put 2 BN2MF-identified patterns (continuous outcomes) into linear regression w/ 
 #function to take component and binary personal care product, regress, and output as tibble
 product_model <- function(V, product) {
 
-model <- lm(get(V) ~ get(product) #+ M_AGE + ETH + M_EDU
+model <- lm(get(V) ~ get(product) + M_AGE + ETH + M_EDU
             , data = mn_scores)
 
 betas_confint <- as.data.frame(model$coefficient[2]) %>% rownames_to_column() %>% 
@@ -66,7 +63,7 @@ product_model("P1", "care")
 
 #Create lists of components and products
 patterns = c("P1", "P2")
-products = colnames(mn_scores)[4:17]
+products = colnames(mn_scores)[14:27]
 
 models = tibble()
 #loop through lm for each pattern/product combo
@@ -102,10 +99,11 @@ heat_gg = models %>%
          pattern = ifelse(pattern == "P1", "Phenols", "Phthalates"))
 
 #Zissou1 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#F21A00"),
-#pdf("./Figures/source_heatmap_unadj.pdf", width = 3)
+#pdf("./Figures/source_heatmap_adj.pdf", width = 3)
 ggplot(data = heat_gg, aes(x = pattern, y = product)) + 
   geom_tile(aes(fill = beta)) + 
-  scale_fill_gradient2(low = "#046C9A", mid = "white", high = "#F21A00") +
+  #scale_fill_distiller(palette = "RdBu")
+  scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00") +
   geom_text(aes(label = sig), size = 10, color = "white", vjust = .8) +
   labs(x = "", y = "", fill = "Coefficient") + 
   theme_minimal(base_size = 20) +
@@ -116,7 +114,7 @@ ggplot(data = heat_gg, aes(x = pattern, y = product)) +
         legend.position = c(0,-0.25),
         panel.grid.major = element_blank(),
         plot.margin = margin(c(0, 0, 50, 0)))
-#dev.off()
+#dv.off()
 
 # heat <- models %>% select(beta, pattern, product) %>%
 #   filter(product != "Total Care") %>% 

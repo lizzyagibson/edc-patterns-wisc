@@ -11,20 +11,15 @@ library(recipes)
 options(mc.cores = parallel::detectCores())
 
 # Data ####
-predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na()
-iq = mn_outcome %>% dplyr::select(SID, WISC)
-mn = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
-# 32 without WISC
-
 e_wa <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 var_wa <- readMat(here::here("./Data/mn2_WA_var.mat"))[[1]] %>% as_tibble() %>% rename(varP2 = V1, varP1 = V2)
 
 summary(e_wa)
 summary(var_wa)
 
-bayes_int = bind_cols(mn, e_wa, var_wa) %>% 
+bayes_int = bind_cols(mn_ppp, e_wa, var_wa) %>% 
         filter(P2 < mean(P2) + 5*sd(P2)) %>% # removes two females, 1 male
-        dplyr::select(-(2:18), -SMOKER_IN_HOME , -ETH) %>% drop_na()
+        drop_na()
 bayes_int # 290 = n
 
 # For stan model ####
