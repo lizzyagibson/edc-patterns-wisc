@@ -17,7 +17,7 @@ var_wa <- readMat(here::here("./Data/mn2_WA_var.mat"))[[1]] %>% as_tibble() %>% 
 summary(e_wa)
 summary(var_wa)
 
-bayes = bind_cols(mn_ppp, e_wa, var_wa) %>% 
+bayes = bind_cols(ppp_cov, e_wa, var_wa) %>% 
         filter(SEX == "Female") %>% 
         filter(P2 < mean(P2) + 5*sd(P2)) %>% # removes two females
         drop_na()
@@ -25,7 +25,7 @@ bayes # 133 = n
 
 # For stan model ####
 N = nrow(bayes)
-C = ncol(bayes) - 6
+C = ncol(bayes) - 6 - 1 -1
 K = 2
 ewa = bayes %>% dplyr::select(P2:P1)
 sd_ewa = bayes %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
@@ -52,42 +52,31 @@ female_fit <- stan(
   )         
 toc()
 
-params = tibble(names = names(female_fit)) %>% 
-  filter(grepl("(alpha|sigma|beta)", names)) %>% 
-  as.matrix()
+params = names(female_fit)[grep("(alpha|sigma|beta)", names(female_fit))]
 
 # Extract fit
-ext_fit <- extract(female_fit, inc_warmup = TRUE, permuted = FALSE)
-#str(ext_fit)
+ext_fit <- extract(female_fit, inc_warmup = TRUE)
 
-pred_all = ext_fit[1001:5000,,]
-str(pred_all)
-
-y_pred = pred_all[,,grepl("y_tilde", dimnames(pred_all)$parameters)]
-#dim(y_pred)
-#dimnames(y_pred)
+y_pred = ext_fit$y_tilde
+post_coef = cbind(ext_fit$alpha, ext_fit$sigma, 
+                       ext_fit$beta_c, ext_fit$beta_p) %>%
+              as_tibble()
+colnames(post_coef) = params
+post_coef
 
 # posterior predict = A draws by nrow(newdata) matrix of simulations from the posterior predictive 
 # distribution. Each row of the matrix is a vector of predictions generated using a single draw of 
 # the model parameters from the posterior distribution. 
-#dim(y_pred)
-
-y_pred_df = tibble()
-for (i in 1:4) {
-  stack = as_tibble(y_pred[,i,])
-  y_pred_df = bind_rows(y_pred_df, stack)
-}
-#dim(y_pred_df)  
 
 samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
 #dim(y_pred_df[samp,])
-post_samp = y_pred_df[samp,]
-#dim(post_samp)
+y_post_samp = y_pred[samp,]
+#dim(y_post_samp)
 
 # Summarize model ####
 
 # RMSE
-sqrt(mean((apply(y_pred, 3, median) - y)^2))
+sqrt(mean((apply(y_pred, 2, median) - y)^2))
 
 # n_eff is a crude measure of effective sample size, 
 # Rhat is the potential scale reduction factor on split chains (at convergence Rhat=1).
@@ -95,7 +84,7 @@ print(female_fit, c("lp__"))
 print(female_fit, params)
 
 # plot coefficients
-plot(female_fit, pars = params)
+plot(female_fit, pars = params, show_density=T, fill_color = "lightblue")
 
 # Plot pattern beta coefficient with uncertainty
 color_scheme_set("brightblue")
@@ -106,10 +95,10 @@ mcmc_areas(female_fit,
 
 # plot posterior prediction
 ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(post_samp))
+                 yrep = as.matrix(y_post_samp))
 
 # posterior pred by grouping variable
-as.matrix(post_samp) %>%
+as.matrix(y_post_samp) %>%
   ppc_stat_grouped(y = as.vector(bayes$WISC),
                    group = as.vector(bayes$M_EDU),
                    stat = "median")
@@ -118,10 +107,34 @@ as.matrix(post_samp) %>%
 color_scheme_set("brightblue")
 ppc_intervals(
   y = as.vector(y),
-  yrep = as.matrix(post_samp),
+  yrep = as.matrix(y_post_samp),
   x = as.vector(as.matrix(ewa[,1])),
   prob = 0.5
 )
+
+# Plot regression line
+f_int = median(post_coef$alpha)
+f_slope = median(post_coef$`beta_p[1]`)
+
+# Get credible interval
+
+samp = sample(1:16000, 500) # (5000-1000 warmup) * 4
+post_samp = post_coef[samp, c(1, 9)]
+colnames(post_samp) = c("alpha", "beta")
+#dim(post_samp)
+
+slope_25 = apply(post_coef[,c(10)], 2, quantile, 0.025)
+slope_75 = apply(post_coef[,c(10)], 2, quantile, 0.975)
+
+bayes %>% 
+  ggplot(aes(x = P2, y = WISC, color = SEX, fill = SEX)) +
+  geom_point() +
+  geom_abline(intercept = f_int, slope = slope_25,
+              color = "skyblue") +
+  geom_abline(intercept = f_int, slope = slope_75,
+              color = "skyblue") +
+  geom_abline(intercept = f_int, slope = f_slope,
+                color = "skyblue4", size = 1)
 
 # Check model fit ####
 
@@ -156,7 +169,7 @@ mcmc_scatter(
 # error
 color_scheme_set("brightblue")
 ppc_error_hist(y = as.vector(y),
-               yrep = as.matrix(post_samp)[1:6,])
+               yrep = as.matrix(y_post_samp)[1:6,])
 
 # log posterior
 ggplot(lp_female, aes(x = Iteration, y = Value, color = as.factor(Chain))) +

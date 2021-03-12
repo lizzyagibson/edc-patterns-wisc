@@ -24,15 +24,15 @@ parameters {
 // The model to be estimated.
 //  With no prior in the model block, the effect is an improper prior on all real numbers. 
 model {
-  // sigma ~ inv_gamma(0.001, 0.001); // prior on error
+  sigma ~ inv_gamma(0.001, 0.001); // prior on error
   // Cite: stat.columbia.edu/~gelman/research/published/taumain.pdf
-  // alpha ~ normal(100, 15); // prior on alpha = IQ
+  alpha ~ normal(100, 15); // prior on alpha = IQ
 
   // beta coefficient priors
   // student t parameters: degrees of freedom nu, location mu, and scale sigma
   // smaller nu, fatter tails
   // beta_c ~ normal(0,5); // student_t(1, 0, 2.5);
-  //  beta_p ~ normal(0,5); // student_t(1, 0, 2.5);
+  // beta_p ~ normal(0,5); // student_t(1, 0, 2.5);
   
   for (n in 1:N) { // prior on data
     for (k in 1:K) {
