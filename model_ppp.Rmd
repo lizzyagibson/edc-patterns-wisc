@@ -68,7 +68,7 @@ predictors = inner_join(mn_pht[,1:10], mn_phenol[,1:9], by = "SID") %>% drop_na(
 iq = mn_outcome %>% dplyr::select(SID, WISC)
 mn_dat = predictors %>% left_join(., mn_demo, by = "SID") %>% left_join(., iq, by = "SID")
 
-ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
+ewa <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 
 mn = bind_cols(mn_dat, ewa)
 
@@ -178,6 +178,7 @@ mn %>%
 ```{r}
 fit_fs1 <- lm(WISC ~ P2 + SEX + P1 + SEX*P2 + M_AGE + 
             M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, data = mn)
+summary(fit_fs1)
 
 predFS1 <- as_tibble(predict(fit_fs1, std.error = TRUE))
 
