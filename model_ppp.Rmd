@@ -65,9 +65,7 @@ get_output = function(fit) {
 
 ```{r, read}
 ewa <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
-mn = bind_cols(mn_ppp, ewa)
-
-mn %>% slice(319)
+mn = bind_cols(ppp_cov, ewa)
 
 summary(mn$WISC)
 summary(mn$HOME_SCORE)

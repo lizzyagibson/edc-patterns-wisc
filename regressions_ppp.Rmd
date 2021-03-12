@@ -42,7 +42,7 @@ source(here::here("/Users/lizzy/BN2MF/functions/fig_set.R"))
 
 ```{r, read}
 ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
-mn = bind_cols(mn_ppp, ewa)
+mn = bind_cols(ppp_cov, ewa)
 ```
 
 ## Distributions

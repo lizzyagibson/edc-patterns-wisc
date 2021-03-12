@@ -238,7 +238,7 @@ cor(cont,use = "complete.obs")
 ## Extreme values
 
 ```{r}
-bind_cols(mn_ppp, ewa) %>% arrange(desc(P2)) %>% select(SID, P1, P2, everything())
+bind_cols(mn_ppp, ewa) %>% filter(P2 > 30) %>% select(SID, P1, P2, everything())
   
 extreme = bind_cols(mn_ppp, ewa) %>% filter(P2 > 30) %>%
   t() %>% as.data.frame() %>% rownames_to_column(var = "Chemical") %>% 

@@ -28,7 +28,7 @@ library(gplots)
 ```{r read}
 ewa <- readMat("./Data/mn2_EWA.mat")[[1]]  %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 
-mn_scores <- bind_cols(mn_ppp, ewa) %>%  
+mn_scores <- bind_cols(ppp_cov, ewa) %>%  
   left_join(., mn_personal) %>% 
   mutate_at(vars(deodorant:creme_rinse), ~as.factor(ifelse(. == 1, "Yes", "No"))) # Recode 1 = Yes, 2 = No
 
