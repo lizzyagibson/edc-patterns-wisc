@@ -41,8 +41,8 @@ source(here::here("/Users/lizzy/BN2MF/functions/fig_set.R"))
 * 9 phthalates  
 
 ```{r, read}
-ewa <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
-mn = bind_cols(ppp_cov, ewa)
+ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
+mn = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
 ```
 
 ## Distributions
@@ -153,7 +153,7 @@ return(list(stats=stats, fit=fit))
 # WISC is the outcome here
 
 # demographics and chemicals and patterns are exposures
-demo = names(mn_demo)[2:10]
+demo = c(names(mn_demo)[2:6], "HOME_SCORE", names(mn_demo)[8:10])
 
 demo_wisc_models = tibble()
 #loop through lm for each exposure/outcome combo
@@ -168,7 +168,8 @@ for (j in 1:length(demo)) {
 ```{r}
 demo_wisc_models %>% arrange(p.value)
 
-summary(lm(WISC ~ HOME_SCORE + M_IQ + ALCOHOL + ETH + M_EDU +SEX+M_AGE+SMOKER_IN_HOME+MARITAL_STATUS, data = mn))
+summary(lm(WISC_PR ~ P1 + P2 + SEX*P2 +
+             HOME_SCORE + M_IQ + ALCOHOL + ETH + M_EDU +SEX+M_AGE+SMOKER_IN_HOME+MARITAL_STATUS, data = mn, subset = (P2 < mean(P2) + 5*sd(P2))))
 ```
 
 ## Predictors of exposure
