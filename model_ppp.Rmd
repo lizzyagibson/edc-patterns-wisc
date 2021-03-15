@@ -49,12 +49,47 @@ options(
   ggplot2.discrete.color = pal_nejm()(8),
   ggplot2.discrete.fill = pal_nejm()(8))
 
-get_output = function(fit) {
-              tidy(fit) %>% bind_cols(., as_tibble(confint(fit))) %>% 
-              dplyr::select(-statistic, -std.error)  # %>% 
-              # bind_cols(., glance(fit) %>% rename(model.p.value = p.value)) %>% 
-              # dplyr::select(-c(sigma:statistic, df:df.residual, r.squared))
+tidy_ci = function(fit) {
+              tidy(fit) %>% bind_cols(., as_tibble(confint(fit)))
             }
+```
+
+```{r, int_function}
+add_ci4interaction <- function(fit, term1, term2) {
+    # CONFIDENCE INTERVAL for pattern in females
+    # Compute association and its uncertainty 
+    
+    # here we create tables of coefficients and covariance
+    coef.mat <- summary(fit)$coefficients
+    var.mat  <- vcov(fit)
+    
+    # the total term for the association is the 
+    # sum of P2 in the reference sex plus the term for P2:female
+    beta.Pf <- coef.mat[term1,1] + coef.mat[term2,1]
+    
+    # Compute variance in order to compute standard error
+    # We must compute the variance for the total term 
+    # Var(Beta1 + Beta2) = Var(Beta1) + Var(Beta2) + 2*CoVar(Beta1, Beta2) 
+    var.Pf <- var.mat[term1, term1] + 
+              var.mat[term2, term2] +
+              2*var.mat[term1, term2]
+    
+    ste.Pf  <- sqrt(abs(var.Pf))
+    
+    # compute confidence intervals 
+    lci.Pf <- beta.Pf - 1.96*ste.Pf
+    uci.Pf <- beta.Pf + 1.96*ste.Pf
+    
+    # 2 calculate the test statistic: t = Est/SE
+    # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
+    test_stat = abs(beta.Pf/ste.Pf)
+    pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
+    pvalue
+    
+    tidy_ci(fit) %>% 
+      bind_rows(., tibble(term = paste0(term1, " in Females"), estimate = beta.Pf, std.error = ste.Pf,
+                statistic = test_stat, p.value = pvalue, `2.5 %` = lci.Pf, `97.5 %` = uci.Pf))
+}
 ```
 
 ## M&N Data
@@ -67,41 +102,35 @@ get_output = function(fit) {
 ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
 
-summary(ewa)
-mn = whole %>% filter(P2 < mean(whole$P2) + 5*sd(whole$P2))
+mn = whole %>% filter(P2 < mean(whole$P2) + 5*sd(whole$P2)) %>% 
+  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
 ```
 
 ## Scatterplots
 
-```{r, fig.height=7}
-whole %>% 
-  dplyr::select(SID, P1, P2, SEX, FSIQ = WISC, PRI = WISC_PR, VCI = WISC_VC) %>% 
+```{r}
+whole %>%
+  dplyr::select(SID, P1, P2, SEX, WISC) %>% 
   mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>% 
-  pivot_longer(c(FSIQ:VCI),
-               names_to = c("wisc"),
-               values_to = "score") %>% 
   pivot_longer(P1:P2) %>% 
   ggplot(aes(x = value, fill = SEX)) +
-  #geom_histogram(aes(x=value), position = "identity", alpha = 0.5) +
-  geom_point(aes(color = SEX, y = score), alpha=0.25) +
-  geom_smooth(aes(color = SEX, y = score), method = "gam", formula = y ~ s(x)) +
-  facet_grid(wisc~name, scales = "free") +
+  geom_histogram(aes(x=value), position = "identity", alpha = 0.5) +
+  geom_point(aes(color = SEX, y = WISC), alpha=0.25) +
+  geom_smooth(aes(color = SEX, y = WISC), method = "gam", formula = y ~ s(x)) +
+  facet_grid(.~name, scales = "free") +
   labs(y = "Full Scale WISC", x="")
 ```
 
 ```{r, fig.height=7}
 mn %>%
-  dplyr::select(SID, P1, P2, SEX, FSIQ = WISC, PRI = WISC_PR, VCI = WISC_VC) %>% 
+  dplyr::select(SID, P1, P2, SEX, WISC) %>% 
   mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>% 
-  pivot_longer(c(FSIQ:VCI),
-               names_to = c("wisc"),
-               values_to = "score") %>% 
   pivot_longer(P1:P2) %>% 
   ggplot(aes(x = value, fill = SEX)) +
-  #geom_histogram(aes(x=value), position = "identity", alpha = 0.5) +
-  geom_point(aes(color = SEX, y = score), alpha=0.25) +
-  geom_smooth(aes(color = SEX, y = score), method = "gam", formula = y ~ s(x)) +
-  facet_grid(wisc~name, scales = "free") +
+  geom_histogram(aes(x=value), position = "identity", alpha = 0.5) +
+  geom_point(aes(color = SEX, y = WISC), alpha=0.25) +
+  geom_smooth(aes(color = SEX, y = WISC), method = "gam", formula = y ~ s(x)) +
+  facet_grid(.~name, scales = "free") +
   labs(y = "Full Scale WISC", x="")
 ```
 
@@ -111,42 +140,44 @@ mn %>%
 
 ```{r}
 par(mfrow=c(1,2))
+summary(gam(WISC ~ s(P1, by = SEX), data = whole))
+plot(gam(WISC ~ s(P1, by = SEX), data = whole))
+```
 
-fit1i <- gam(WISC ~    s(P2, by = SEX), data = mn)
-summary(fit1i)
-plot(fit1i)
+```{r}
+par(mfrow=c(1,2))
+summary(gam(WISC ~ s(P2, by = SEX), data = whole))
+plot(gam(WISC ~ s(P2, by = SEX), data = whole))
+```
 
-fit2i <- gam(WISC_PR ~ s(P2, by = SEX), data = mn)
-summary(fit2i)
-plot(fit2i)
+```{r}
+par(mfrow=c(1,2))
+summary(gam(WISC ~ s(P1, by = SEX) + SEX, data = mn))
+plot(gam(WISC ~ s(P1, by = SEX) + SEX, data = mn)) 
+```
 
-fit3i <- gam(WISC_VC ~ s(P2, by = SEX), data = mn)
-summary(fit3i)
-plot(fit3i)
+```{r}
+par(mfrow=c(1,2))
+summary(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn))
+plot(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn)) 
 ```
 
 ### Adjusted
 
 ```{r}
 par(mfrow=c(1,2))
-
-fit1ia <- gam(WISC ~ s(P2, by = SEX) + P1 + 
-              M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE, 
+fit_spa1 <- gam(WISC ~ s(P1, by = SEX) + SEX +
+              M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE + SMOKER_IN_HOME, 
               data = mn)
-summary(fit1ia)
-plot(fit1ia)
+summary(fit_spa1)
+plot(fit_spa1)
 
-fit2ia <- gam(WISC_PR ~ s(P2, by = SEX) + P1 + 
-              M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE, 
+par(mfrow=c(1,2))
+fit_spa2 <- gam(WISC ~ s(P2, by = SEX) + SEX +
+              M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE + SMOKER_IN_HOME, 
               data = mn)
-summary(fit2ia)
-plot(fit2ia)
-
-fit3ia <- gam(WISC_VC ~ s(P2, by = SEX) + P1 + 
-              M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE, 
-              data = mn)
-summary(fit3ia)
-plot(fit3ia)
+summary(fit_spa2)
+plot(fit_spa2)
 ```
 
 ## Interaction
@@ -154,171 +185,55 @@ plot(fit3ia)
 ### Unadjusted
 
 ```{r}
-fit1li <- lm(WISC ~ P1 + P2 + SEX + SEX*P2 + SEX*P1, data = mn)
-get_output(fit1li)
+fit1i <- lm(WISC ~ P1 + SEX + SEX*P1, data = mn)
+add_ci4interaction(fit1i, "P1", "P1:SEXFemale")
 
-fit2li <- lm(WISC ~ P1 + SEX + SEX*P1, data = mn)
-get_output(fit2li)
-
-fit3li <- lm(WISC ~ P2 + SEX + SEX*P2, data = mn)
-get_output(fit3li)
+fit2i <- lm(WISC ~ P2 + SEX + SEX*P2, data = mn)
+add_ci4interaction(fit2i, "P2", "P2:SEXFemale")
 ```
 
 ### Adjusted
 
 ```{r}
-fit1lia <- lm(WISC ~ P1 + P2 + SEX*P2 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
-              MARITAL_STATUS + HOME_SCORE, data = mn)
-get_output(fit1lia)
+fit1ia <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME
+            # SEX*M_IQ + SEX*ALCOHOL + SEX*M_EDU + SEX*M_AGE +
+            #  SEX*MARITAL_STATUS + SEX*HOME_SCORE + SEX*SMOKER_IN_HOME
+             , data = mn)
+add_ci4interaction(fit1ia, "P1", "P1:SEXFemale")
 
-fit2lia <- lm(WISC ~ P1 +SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE +
-              MARITAL_STATUS + HOME_SCORE, data = mn)
-get_output(fit2lia)
-
-fit3lia <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE + HOME_SCORE
-              , data = mn)
-get_output(fit3lia)
-
-# Compute the association and its uncertainty 
-
-# here we create tables of coefficients and covariance
-coef.mat <- summary(fit3lia)$coefficients
-var.mat  <- vcov(fit3lia)
-
-# the total term for the association is the 
-# sum of P2 in the reference sex plus the term for P2:female
-beta.P2f <- coef.mat["P2",1] + coef.mat["P2:SEXFemale",1]
-
-# Compute variance in order to compute standard error
-# We must compute the variance for the total term 
-# Var(Beta1 + Beta2) = Var(Beta1) + Var(Beta2) + 2*CoVar(Beta1, Beta2) 
-
-var.P2f <- var.mat["P2", "P2"] + 
-           var.mat["P2:SEXFemale", "P2:SEXFemale"] +
-           2*var.mat["P2", "P2:SEXFemale"]
-
-ste.P2f  <- sqrt(abs(var.P2f))
-
-# compute confidence intervals 
-lci.P2f <- beta.P2f - 1.96*ste.P2f
-uci.P2f <- beta.P2f + 1.96*ste.P2f
-
-P2.f <- paste(round(beta.P2f, 3), " (95% CI: ", round(lci.P2f, 3), ", ", 
-               round(uci.P2f, 3), ")", sep = "")
-
-# we can ask whether including the interaction terms improved model fit 
-# anova() provides a nice test 
-
-anova(mod1, mod2)
-```
-
-## Stratify models
-
-### Unadjusted
-
-#### Female
-```{r}
-fit1f <- lm(WISC ~ P2, data = mn, subset = (SEX == "Female"))
-get_output(fit1f)
-
-fit2f <- lm(WISC_PR ~ P2, data = mn, subset = (SEX == "Female"))
-get_output(fit2f)
-
-fit3f <- lm(WISC_VC ~ P2, data = mn, subset = (SEX == "Female"))
-get_output(fit3f)
-```
-
-#### Male
-```{r}
-fit1m <- lm(WISC ~ P2, data = mn, subset = (SEX == "Male"))
-get_output(fit1m)
-
-fit2m <- lm(WISC_PR ~ P2, data = mn, subset = (SEX == "Male"))
-get_output(fit2m)
-
-fit3m <- lm(WISC_VC ~ P2, data = mn, subset = (SEX == "Male"))
-get_output(fit3m)
-```
-
-### Adjusted
-
-#### Female
-```{r}
-fit1fa <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS  + M_AGE + 
-                    HOME_SCORE, 
-             data = mn, subset = (SEX == "Female"))
-get_output(fit1fa)
-
-fit2fa <- lm(WISC_PR ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
-               HOME_SCORE, 
-             data = mn, subset = (SEX == "Female"))
-get_output(fit2fa)
-
-fit3fa <- lm(WISC_VC ~  P1 + P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS +
-               HOME_SCORE, 
-             data = mn, subset = (SEX == "Female"))
-get_output(fit3fa)
-```
-
-#### Male
-```{r}
-fit1ma <- lm(WISC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE +
-               HOME_SCORE
-             , data = mn, subset = (SEX == "Male"))
-get_output(fit1ma)
-
-fit2ma <- lm(WISC_PR ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + M_AGE + 
-               HOME_SCORE, 
-             data = mn, subset = (SEX == "Male"))
-get_output(fit2ma)
-
-fit3ma <- lm(WISC_VC ~ P1 + P2 + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS +
-               HOME_SCORE, 
-             data = mn, subset = (SEX == "Male"))
-tidy(fit3ma)
+fit2ia <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME
+             # SEX*M_IQ + SEX*ALCOHOL + SEX*M_EDU + SEX*M_AGE +
+             # SEX*MARITAL_STATUS + SEX*HOME_SCORE + SEX*SMOKER_IN_HOME
+             , data = mn)
+add_ci4interaction(fit2ia, "P2", "P2:SEXFemale")
 ```
 
 ## Main Models
 
 ```{r}
-pred_m = predict(fit1ma, se.fit = TRUE)
-pred_f = predict(fit1fa, se.fit = TRUE)
-
-pred_m_pr = predict(fit2ma, se.fit = TRUE)
-pred_f_pr = predict(fit2fa, se.fit = TRUE)
-
-pred_m_vc = predict(fit3ma, se.fit = TRUE)
-pred_f_vc = predict(fit3fa, se.fit = TRUE)
+pred_1 = predict(fit1ia, se.fit = TRUE)
+pred_2 = predict(fit2ia, se.fit = TRUE)
 
 # Subset so that n matches regression results
-mn_subset = mn %>% dplyr::select(WISC_FS = WISC, WISC_PR, WISC_VC, P2, SEX, M_IQ, ALCOHOL, M_EDU, 
-                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
+mn_subset = mn %>% dplyr::select(SID, WISC, P_1 = P1, P_2 = P2, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,
+                                 MARITAL_STATUS, HOME_SCORE, SMOKER_IN_HOME) %>% drop_na() %>% 
               mutate(model = "Main Model")
 
-mn_subsetm = mn_subset %>% filter(SEX == "Male")
-mn_subsetf = mn_subset %>% filter(SEX == "Female")
-
-male_pred   = bind_cols(mn_subsetm, pred_fs = pred_m$fit, predse_fs = pred_m$se.fit,
-                        pred_pr = pred_m_pr$fit, predse_pr = pred_m_pr$se.fit,
-                        pred_vc = pred_m_vc$fit, predse_vc = pred_m_vc$se.fit)
-female_pred = bind_cols(mn_subsetf, pred_fs = pred_f$fit, predse_fs = pred_f$se.fit,
-                        pred_pr = pred_f_pr$fit, predse_pr = pred_f_pr$se.fit,
-                        pred_vc = pred_f_vc$fit, predse_vc = pred_f_vc$se.fit)
+pred = bind_cols(mn_subset, pred_1 = pred_1$fit, se_1 = pred_1$se.fit,
+                            pred_2 = pred_2$fit, se_2 = pred_2$se.fit)
 
 # Combine predicted outcomes with data
 main = 
-  bind_rows(male_pred, female_pred) %>% 
-  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE)) %>% 
-  pivot_longer(c(WISC_FS:WISC_VC, pred_fs:predse_vc),
-               names_to = c("variable", "outcome"),
+  pred %>% 
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, SMOKER_IN_HOME, M_AGE)) %>% 
+  mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>%
+  pivot_longer(c(P_1:P_2, pred_1:se_2),
+               names_to = c("term", "pattern"),
                names_sep = "_") %>% 
-    mutate(outcome = str_to_upper(outcome)) %>% 
-    pivot_wider(names_from = variable,
-                values_from = value) %>% 
-  mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>% 
-  mutate(outcome = case_when(outcome =="FS" ~ "Full Scale",
-                             outcome == "PR" ~ "Perceptual Reasoning",
-                             outcome == "VC" ~ "Verbal Comprehension"))
+  pivot_wider(names_from = term,
+              values_from = value)
 
 # this coefficient is not the same
 # these se are wrong
@@ -344,71 +259,98 @@ main =
 # stderr3m = tidy(fit3ma)[3,3] %>% pull()
 # stderr3f = tidy(fit3fa)[3,3] %>% pull()
 
+p2_sf = -3.25
+p2_if = 102
+p2_sef = 1.56
+
+p2f_reg = function(x) {
+  y = p2_if + p2_sf*x
+  xy = bind_cols(x=x, y=y, se=p2_sef)
+  xy
+  }
+
+p2f_l = p2f_reg(0:6)
+
+p2_sm = -0.665
+p2_im = 102
+p2_sem = 1.19
+
+p2m_reg = function(x) {
+  y = p2_im - p2_sm *x
+  xy = bind_cols(x=x, y=y, se=p2_sem)
+  xy
+  }
+
+p2m_l = p2m_reg(0:6)
+
 main %>% 
-  ggplot(aes(x = P2, color = SEX, fill = SEX)) +
+  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
   geom_point(aes(y = WISC), alpha=0.5, size = 0.5) +
   geom_smooth(aes(y = pred),
-              method = "lm", fullrange = TRUE, ) +
-  # geom_smooth(aes(y = pred + 1.96*predse), 
-  #            se=F, linetype = "dashed", size = 0.5, method = "lm", fullrange = TRUE) +
-  # geom_smooth(aes(y = pred - 1.96*predse), 
-  #            se=F, linetype = "dashed", size = 0.5, method = "lm", fullrange = TRUE) +
-  facet_wrap(.~outcome) + 
-  labs(y = "WISC Scaled Score", x = "Pattern concentration (ng/ml)") +
-  theme(strip.text.x = element_text(size = 10))
+              method = "lm", fullrange = TRUE, se=F) +
+  # Female
+  # geom_ribbon(data = p2f_l, aes(x = x, ymin =  y-1.96*se, ymax = y+1.96*se),
+  #             alpha = 0.75, fill = "pink") + 
+  # geom_line(data = p2f_l, aes(x = x, y = y), color = "red") +
+  # # Male
+  # geom_ribbon(data = p2m_l, aes(x = x, ymin =  y-1.96*se, ymax = y+1.96*se),
+  #             alpha = 0.75, fill = "lightblue") + 
+  # geom_line(data = p2m_l, aes(x = x, y = y), color = "blue")
+  geom_smooth(aes(y = pred + 1.96*se), 
+              se=F, linetype = "dashed", size = 0.5, method = "lm", fullrange = TRUE) +
+  geom_smooth(aes(y = pred - 1.96*se), 
+              se=F, linetype = "dashed", size = 0.5, method = "lm", fullrange = TRUE) +
+  facet_wrap(.~pattern) + 
+  labs(y = "WISC Scaled Score", x = "Pattern concentration")
 ```
 
 ## Sensitivity
 
 ```{r}
-fit_sense <- gam(WISC ~ s(P2, by = SEX) + P1 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE, 
+fit_sense_1 <- gam(WISC ~ s(P1, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + 
+                     MARITAL_STATUS + HOME_SCORE + M_AGE + SMOKER_IN_HOME, 
                  data = whole)
-fit_sense_pr <- gam(WISC_PR ~ s(P2, by = SEX) + P1 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE,
-                    data = whole)
-fit_sense_vc <- gam(WISC_VC ~ s(P2, by = SEX) + P1 + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE,
+fit_sense_2 <- gam(WISC ~ s(P2, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + 
+                     HOME_SCORE + M_AGE + SMOKER_IN_HOME,
                     data = whole)
 
-ps_predict = as_tibble(predict(fit_sense, se.fit = T))
-ps_predict_pr = as_tibble(predict(fit_sense_pr, se.fit = T))
-ps_predict_vc = as_tibble(predict(fit_sense_vc, se.fit = T))
+ps_predict_1 = as_tibble(predict(fit_sense_1, se.fit = T))
+ps_predict_2 = as_tibble(predict(fit_sense_2, se.fit = T))
 
-mn_subset = whole %>% dplyr::select(WISC_FS = WISC, WISC_PR, WISC_VC, P1, P2, SEX, M_IQ, ALCOHOL, M_EDU, 
+mn_subset = whole %>% dplyr::select(SID, WISC, P_1 = P1, P_2 = P2, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE, SMOKER_IN_HOME,
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na()
 
-spline_pred = bind_cols(mn_subset, pred_fs = ps_predict$fit, predse_fs = ps_predict$se.fit,
-                        pred_pr = ps_predict_pr$fit, predse_pr = ps_predict_pr$se.fit,
-                        pred_vc = ps_predict_vc$fit, predse_vc = ps_predict_vc$se.fit) %>% 
+spline_pred = bind_cols(mn_subset, pred_1 = ps_predict_1$fit, se_1 = ps_predict_1$se.fit,
+                                   pred_2 = ps_predict_2$fit, se_2 = ps_predict_2$se.fit) %>% 
               mutate(model = "Penalized Spline")
 
-sense_all = bind_rows(spline_pred, male_pred, female_pred) %>% 
-  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE)) %>% 
-  pivot_longer(c(WISC_FS:WISC_VC, pred_fs:predse_vc),
-               names_to = c("variable", "outcome"),
+sense_all = bind_rows(spline_pred, pred) %>% 
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, M_AGE, SMOKER_IN_HOME)) %>% 
+  pivot_longer(c(P_1:P_2, pred_1:se_2),
+               names_to = c("term", "pattern"),
                names_sep = "_") %>% 
-    mutate(outcome = str_to_upper(outcome)) %>% 
-    pivot_wider(names_from = variable,
-                values_from = value) %>% 
-  mutate(outcome = case_when(outcome =="FS" ~ "Full Scale",
-                             outcome == "PR" ~ "Perceptual Reasoning",
-                             outcome == "VC" ~ "Verbal Comprehension")) %>% 
-  mutate(extreme = ifelse(P2 > mean(P2) + 5*sd(P2), "Yes", "No"))
+  pivot_wider(names_from = term,
+              values_from = value) %>% 
+  mutate(extreme = ifelse(SID %in% c(453, 1209, 1229), "Yes", "No"),
+         pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1"))
 
 pal = brewer.pal(11, "RdBu")[c(2,4,11,10)]
 
 sense_all %>% 
-  ggplot(aes(x = P2)) +
+  ggplot(aes(x = P)) +
   geom_point(aes(y = WISC), alpha=0.25, color="grey") +
   geom_point(aes(y = WISC), color="black",
              data = subset(sense_all, extreme =="Yes")) +
   geom_smooth(aes(y = pred, fill = interaction(SEX, model), color = interaction(SEX, model),
-                  ymin = pred - 1.96*predse,
-                  ymax = pred + 1.96*predse), 
+                  ymin = pred - 1.96*se,
+                  ymax = pred + 1.96*se), 
               method = "gam", formula = y ~ s(x),
               data = subset(sense_all, model =="Penalized Spline"),
               linetype = 'dashed', fullrange = TRUE) +
   geom_smooth(aes(y = pred, fill = interaction(SEX, model), color = interaction(SEX, model),
-                  ymin = pred - 1.96*predse,
-                  ymax = pred + 1.96*predse), method = "lm", fullrange = TRUE,
+                  ymin = pred - 1.96*se,
+                  ymax = pred + 1.96*se), method = "lm", fullrange = TRUE,
              data = subset(sense_all, model =="Main Model"),
              alpha = 0.25) +
   scale_fill_manual(values = pal, labels = c("", "Female", "", "Male")) +
@@ -416,16 +358,15 @@ sense_all %>%
   # geom_histogram(aes(x=value, group = name), 
   #                position = "identity", alpha = 0.5,
   #                data = subset(sense_plot, model =="Penalized Spline")) +
-  facet_wrap(.~outcome) + 
-  labs(y = "WISC Scaled Score", x = "Pattern concentration (ng/ml)") +
-  theme(strip.text.x = element_text(size = 10))
+  facet_wrap(.~pattern) + 
+  labs(y = "WISC Scaled Score", x = "Pattern concentration (ng/ml)")
 ```
 
 ## Residuals
 
 ```{r, fig3, fig.height=3, fig.width = 9, results='hide'}
 
-models = c("fit1ma", "fit1fa", "fit2ma", "fit2fa", "fit3ma", "fit3fa")
+models = c("fit1ia", "fit2ia")
 
 #loop through lm residual plots
 for (j in 1:length(models)) {
@@ -434,18 +375,12 @@ for (j in 1:length(models)) {
   #print(paste0("Predictor: ", demo_chem_pat[j]))
   par(mfrow=c(1,4))
   
-  if(grepl("m", models[j])) {sex = "Male"} else {sex = "Female"}
+  if(grepl("2", models[j])) {model = "Pattern 2"} else {model = "Pattern 1"}
   
-  if(grepl("1", models[j])) {
-    m = "FSIQ"
-  } else if(grepl("2", models[j])) {
-      m = "PRI"
-  } else if(grepl("3", models[j])) { m = "VCI"}
-  
-  print(plot(fit, which=1, col=c("blue"), main=paste0(m, ": ", sex)))
-  print(plot(fit, which=2, col=c("blue"), main=paste0(m, ": ", sex)))
-  print(plot(fit, which=3, col=c("blue"), main=paste0(m, ": ", sex)))
-  print(plot(fit, which=5, col=c("blue"), main=paste0(m, ": ", sex)))
+  print(plot(fit, which=1, col=c("blue"), main=model))
+  print(plot(fit, which=2, col=c("blue"), main=model))
+  print(plot(fit, which=3, col=c("blue"), main=model))
+  print(plot(fit, which=5, col=c("blue"), main=model))
 }
 ```
 
@@ -456,27 +391,19 @@ mn_long = mn %>% rename(WISC_FS = WISC) %>%
   pivot_longer(c(WISC_FS, WISC_PR, WISC_VC)) %>% 
   mutate(name = as.factor(name))
 
-# ICCest(name, value, data = mn_long)
-# ICCest(SID, value, data = mn_long)
-# k = the number of measurements per individual or group.
-
-# cor(mn$WISC, mn$WISC_PR, use = "complete.obs")
-# cor(mn$WISC, mn$WISC_VC, use = "complete.obs")
-# cor(mn$WISC, mn$WISC_PS, use = "complete.obs")
-# cor(mn$WISC, mn$WISC_WM, use = "complete.obs")
-# cor(mn$WISC_VC, mn$WISC_PR, use = "complete.obs")
-# cor(mn$WISC_PS, mn$WISC_PR, use = "complete.obs")
-# cor(mn$WISC_WM, mn$WISC_PR, use = "complete.obs")
-# cor(mn$WISC_VC, mn$WISC_PS, use = "complete.obs")
-# cor(mn$WISC_VC, mn$WISC_WM, use = "complete.obs")
-# cor(mn$WISC_WM, mn$WISC_PS, use = "complete.obs")
-
-multi_fit <- lmer(formula = value ~ (1| name) + (1 | SID) + P2 + P1 + SEX + P2*SEX + P1*SEX + 
+multi_p2 <- lmer(formula = value ~ (1 + P2| name) + (1 | SID) + P2 + SEX + P2*SEX +
                                                 M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS +
                                                 HOME_SCORE + SMOKER_IN_HOME, data=mn_long)
-# summary(multi_fit)
-tidy(multi_fit)
+# summary(multi_p2)
+tidy(multi_p2)
 ```
 
+```{r}
+multi_p1 <- lmer(formula = value ~ (1 | name) + (1 | SID) + P1 + SEX + P1*SEX +
+                                                M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS +
+                                                HOME_SCORE + SMOKER_IN_HOME, data=mn_long)
+# summary(multi_p1)
+tidy(multi_p1)
+```
 
 
