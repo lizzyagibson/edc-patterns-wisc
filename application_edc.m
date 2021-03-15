@@ -123,4 +123,4 @@ save("/Users/lizzy/ppp_patterns/Data/mn2_WA_upper.mat", 'upper_ci_WA');
 save("/Users/lizzy/ppp_patterns/Data/mn2_WA_lower.mat", 'lower_ci_WA');
 save("/Users/lizzy/ppp_patterns/Data/mn2_WA_var.mat", 'varWA');
 
-save("//Users/lizzy/ppp_patterns/Data/mn2_all.mat");
+save("/Users/lizzy/ppp_patterns/Data/mn2_all.mat");
