@@ -30,8 +30,9 @@ parameters {
 // Are usually the arguments to the log-likelihood function that is evaluated in the model block, 
 // although in hierarchical models the line between the prior and the likelihood can be drawn in multiple ways
 transformed parameters {
-    vector<lower=0>[N] P1 = WA[,1] ;
+    vector<lower=0>[N] P1;
     vector<lower=0>[N] inter; // pattern score * sex
+    P1 = WA[,1]; // extract for interaction
     inter = P1 .* sex;
 }
 

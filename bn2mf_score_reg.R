@@ -18,18 +18,20 @@ summary(e_wa)
 summary(var_wa)
 
 bayes = bind_cols(ppp_cov, e_wa, var_wa) %>% 
+        rename(HOME_SCORE = HOMETOT) %>% 
         filter(SEX == "Female") %>% 
         filter(P2 < mean(P2) + 5*sd(P2)) %>% # removes two females
         drop_na()
-bayes # 133 = n
+bayes # 131 = n
 
 # For stan model ####
 N = nrow(bayes)
-C = ncol(bayes) - 6 - 1 -1
+C = ncol(bayes) - 6 - 1 - 1 -1 -1
 K = 2
 ewa = bayes %>% dplyr::select(P2:P1)
 sd_ewa = bayes %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
 x = model.matrix(WISC ~ M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + M_AGE, data = bayes)[,-1]
+head(x)
 y = bayes$WISC
 
 # Run stan model ####
@@ -57,21 +59,20 @@ params = names(female_fit)[grep("(alpha|sigma|beta)", names(female_fit))]
 # Extract fit
 ext_fit <- extract(female_fit, inc_warmup = TRUE)
 
+# predicted y values (draws x individuals)
 y_pred = ext_fit$y_tilde
+
+# estimated beta coefficients (draws x predictors)
 post_coef = cbind(ext_fit$alpha, ext_fit$sigma, 
                        ext_fit$beta_c, ext_fit$beta_p) %>%
               as_tibble()
 colnames(post_coef) = params
 post_coef
 
-# posterior predict = A draws by nrow(newdata) matrix of simulations from the posterior predictive 
-# distribution. Each row of the matrix is a vector of predictions generated using a single draw of 
-# the model parameters from the posterior distribution. 
-
+# random sample of y
 samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
-#dim(y_pred_df[samp,])
 y_post_samp = y_pred[samp,]
-#dim(y_post_samp)
+dim(y_post_samp)
 
 # Summarize model ####
 
@@ -113,28 +114,35 @@ ppc_intervals(
 )
 
 # Plot regression line
+summary(female_fit, params)$summary
+
 f_int = median(post_coef$alpha)
 f_slope = median(post_coef$`beta_p[1]`)
 
 # Get credible interval
-
 samp = sample(1:16000, 500) # (5000-1000 warmup) * 4
 post_samp = post_coef[samp, c(1, 9)]
 colnames(post_samp) = c("alpha", "beta")
-#dim(post_samp)
 
-slope_25 = apply(post_coef[,c(10)], 2, quantile, 0.025)
-slope_75 = apply(post_coef[,c(10)], 2, quantile, 0.975)
+slope_25 = apply(post_coef[,c(9)], 2, quantile, 0.025)
+slope_m = apply(post_coef[,c(9)], 2, median)
+slope_75 = apply(post_coef[,c(9)], 2, quantile, 0.975)
+
+reg_pred = apply(y_pred, 2, median)
+reg_low   = apply(y_pred, 2, quantile, 0.025)
+reg_up   = apply(y_pred, 2, quantile, 0.975)
+reg_sd   = apply(y_pred, 2, sd)
 
 bayes %>% 
-  ggplot(aes(x = P2, y = WISC, color = SEX, fill = SEX)) +
-  geom_point() +
-  geom_abline(intercept = f_int, slope = slope_25,
-              color = "skyblue") +
-  geom_abline(intercept = f_int, slope = slope_75,
-              color = "skyblue") +
-  geom_abline(intercept = f_int, slope = f_slope,
-                color = "skyblue4", size = 1)
+  ggplot(aes(x = P2, ymin = reg_low, ymax = reg_up)) +
+  geom_point(aes(y = WISC), color = "grey") +
+  geom_smooth(aes(y = reg_pred, ymin = reg_low, ymax = reg_up), se=F,
+              method = "lm") + 
+  geom_smooth(aes(y = reg_up), se=F, linetype = "dashed",
+              method = "lm") + 
+  geom_smooth(aes(y = reg_low), se=F, linetype = "dashed",
+              method = "lm") + 
+  theme_bw()
 
 # Check model fit ####
 
