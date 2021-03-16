@@ -15,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='
 options(scipen = 999)
 library(haven)
 library(tidyverse)
+library(RColorBrewer)
+library(mgcv)
 library(janitor)
 library(reshape2)
 library(broom)
@@ -91,8 +93,9 @@ add_ci4interaction <- function(fit, term1, term2) {
     pvalue
     
     tidy_ci(fit) %>% 
-      bind_rows(., tibble(term = paste0(term1, " in Females"), estimate = beta.Pf, std.error = ste.Pf,
-                statistic = test_stat, p.value = pvalue, `2.5 %` = lci.Pf, `97.5 %` = uci.Pf))
+      bind_rows(., tibble(term = paste0(term1, " in females"), estimate = beta.Pf, std.error = ste.Pf,
+                statistic = test_stat, p.value = pvalue, `2.5 %` = lci.Pf, `97.5 %` = uci.Pf)) %>% 
+      mutate(term = ifelse(term == term1, paste(term1, "in males"), term))
 }
 ```
 
@@ -363,4 +366,170 @@ ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) +
 
 
 ## Health models
+
+```{r}
+par(mfrow=c(1,2))
+summary(gam(WISC ~ s(P1, by = SEX) + SEX, data = mn))
+plot(gam(WISC ~ s(P1, by = SEX) + SEX, data = mn)) 
+summary(gam(WISC ~ s(P1, by = SEX) + SEX +
+              M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE + SMOKER_IN_HOME, 
+              data = mn))
+
+par(mfrow=c(1,2))
+summary(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn))
+plot(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn)) 
+```
+
+### Unadjusted
+
+```{r}
+fit_p1 <- lm(WISC ~ P1 + SEX + SEX*P1, data = mn)
+add_ci4interaction(fit_p1, "P1", "P1:SEXFemale")
+
+fit_p2 <- lm(WISC ~ P2 + SEX + SEX*P2, data = mn)
+add_ci4interaction(fit_p2, "P2", "P2:SEXFemale")
+```
+
+### Adjusted
+
+```{r}
+fit_p1a <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME
+             , data = mn)
+add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
+glance(fit_p1a)[,-c(11:12)]
+
+fit_p2a <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME
+             , data = mn)
+add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")
+glance(fit_p2a)[,-c(11:12)]
+```
+
+## Main models
+
+```{r, fig.height=7}
+pred_1 = predict(fit_p1a, se.fit = TRUE)
+pred_2 = predict(fit_p2a, se.fit = TRUE)
+
+# Subset so that n matches regression results
+mn_subset = mn %>% dplyr::select(SID, WISC, P_1 = P1, P_2 = P2, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,
+                                 MARITAL_STATUS, HOME_SCORE, SMOKER_IN_HOME) %>% drop_na() %>% 
+              mutate(model = "Main Model")
+
+pred = bind_cols(mn_subset, pred_1 = pred_1$fit, se_1 = pred_1$se.fit,
+                            pred_2 = pred_2$fit, se_2 = pred_2$se.fit)
+
+# Combine predicted outcomes with data
+main = 
+  pred %>% 
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, SMOKER_IN_HOME, M_AGE)) %>% 
+  mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>%
+  pivot_longer(c(P_1:P_2, pred_1:se_2),
+               names_to = c("term", "pattern"),
+               names_sep = "_") %>% 
+  pivot_wider(names_from = term,
+              values_from = value)
+
+main %>% 
+  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = pred),
+              method = "lm", fullrange = TRUE, se=F) +
+  geom_smooth(aes(y = pred + 1.96*se), 
+              se=F, linetype = "dotted", size = 0.5,
+              method = "lm", fullrange = TRUE) +
+  geom_smooth(aes(y = pred - 1.96*se), 
+              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
+  facet_wrap(.~pattern) + 
+  labs(y = "WISC Scaled Score", x = "Pattern concentration")
+```
+
+## Bayesian models
+
+
+
+
+
+
+## Sensitivity
+
+```{r, fig.height=7}
+fit_sense_1 <- gam(WISC ~ s(P1, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + 
+                     MARITAL_STATUS + HOME_SCORE + M_AGE + SMOKER_IN_HOME, 
+                 data = whole)
+fit_sense_2 <- gam(WISC ~ s(P2, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + 
+                     HOME_SCORE + M_AGE + SMOKER_IN_HOME,
+                    data = whole)
+
+ps_predict_1 = as_tibble(predict(fit_sense_1, se.fit = T))
+ps_predict_2 = as_tibble(predict(fit_sense_2, se.fit = T))
+
+mn_subset = whole %>% dplyr::select(SID, WISC, P_1 = P1, P_2 = P2, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE, SMOKER_IN_HOME,
+                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na()
+
+spline_pred = bind_cols(mn_subset, pred_1 = ps_predict_1$fit, se_1 = ps_predict_1$se.fit,
+                                   pred_2 = ps_predict_2$fit, se_2 = ps_predict_2$se.fit) %>% 
+              mutate(model = "Penalized Spline")
+
+sense_all = bind_rows(spline_pred, pred) %>% 
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, M_AGE, SMOKER_IN_HOME)) %>% 
+  pivot_longer(c(P_1:P_2, pred_1:se_2),
+               names_to = c("term", "pattern"),
+               names_sep = "_") %>% 
+  pivot_wider(names_from = term,
+              values_from = value) %>% 
+  mutate(extreme = ifelse(SID %in% c(453, 1209, 1229), "Yes", "No"),
+         pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1"))
+
+pal = brewer.pal(11, "RdBu")[c(2,4,11,10)]
+
+sense_all %>% 
+  ggplot(aes(x = P, fill = interaction(SEX, model))) +
+  geom_point(aes(y = WISC), alpha=0.25, color="grey") +
+  geom_point(aes(y = WISC), color="black",
+             data = subset(sense_all, extreme =="Yes")) +
+  geom_smooth(aes(y = pred, color = interaction(SEX, model)), 
+              method = "gam", formula = y ~ s(x), se=F,
+              data = subset(sense_all, model =="Penalized Spline"),
+              linetype = 'dashed', fullrange = TRUE) +
+    geom_smooth(aes(y = pred - 1.96*se, color = interaction(SEX, model)), 
+              method = "gam", formula = y ~ s(x), se=F,
+              data = subset(sense_all, model =="Penalized Spline"),
+              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
+    geom_smooth(aes(y = pred + 1.96*se, color = interaction(SEX, model)), 
+              method = "gam", formula = y ~ s(x), se=F,
+              data = subset(sense_all, model =="Penalized Spline"),
+              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
+  geom_smooth(aes(y = pred, color = interaction(SEX, model)),
+              method = "gam", formula = y ~ s(x), se=F,
+              data = subset(sense_all, model =="Main Model"),
+              fullrange = TRUE) +
+    geom_smooth(aes(y = pred - 1.96*se, color = interaction(SEX, model)),
+              method = "gam", formula = y ~ s(x), se=F,
+              data = subset(sense_all, model =="Main Model"),
+              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
+    geom_smooth(aes(y = pred + 1.96*se, color = interaction(SEX, model)),
+              method = "gam", formula = y ~ s(x), se=F,
+              data = subset(sense_all, model =="Main Model"),
+              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
+  scale_fill_manual(values = pal, labels = c("", "Female", "", "Male")) +
+  scale_color_manual(values = pal, labels = c("", "Female", "", "Male")) +
+  facet_wrap(.~pattern, scales = "free_x") + 
+  labs(y = "WISC Scaled Score", x = "Pattern concentration") +
+  theme(legend.title = element_blank())
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
