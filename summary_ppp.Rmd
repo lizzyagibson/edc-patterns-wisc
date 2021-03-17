@@ -525,26 +525,6 @@ ppc_dens_overlay(y = as.vector(y),
        x = "Full Scale WISC")
 ```
 
-#### Pattern 2
-
-```{r}
-# Extract fit
-ext_p2 <- extract(p2_fit)
-
-y_pred_p2 = ext_p2$y_tilde
-
-# random sample of y
-y_post_samp_p2 = y_pred_p2[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p2)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "with Pattern 2 overlaid on measured density",
-       x = "Full Scale WISC")
-```
 
 ### Coefficients of interest
 
