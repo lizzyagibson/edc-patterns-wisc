@@ -140,8 +140,9 @@ uci.f <- mean(beta_f) + 1.96*se_f
 
 # 2 calculate the test statistic: t = Est/SE
 # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
-test_stat = abs(mean(beta_f)/se_f)
-pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
+# test_stat = abs(mean(beta_f)/se_f)
+# pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
+# NO BAYESIAN PVALUE
 
 q = quantile(beta_f, probs = c(0.025, .25, .50, .75, .975)) %>% as.data.frame() %>% 
   rownames_to_column() %>% 
