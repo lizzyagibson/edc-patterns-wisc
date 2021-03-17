@@ -26,7 +26,7 @@ library(gplots)
 ## Read Data
 
 ```{r read}
-ewa <- readMat("./Data/mn2_EWA.mat")[[1]]  %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
+ewa <- readMat("./Data/mn2_EWA_sd1.mat")[[1]]  %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 
 mn_scores <- bind_cols(ppp_cov, ewa) %>%  
   left_join(., mn_personal) %>% 
@@ -63,7 +63,7 @@ product_model("P1", "care")
 
 #Create lists of components and products
 patterns = c("P1", "P2")
-products = colnames(mn_scores)[14:27]
+products = colnames(mn_scores)[15:28]
 
 models = tibble()
 #loop through lm for each pattern/product combo
@@ -96,8 +96,8 @@ heat_gg = models %>%
                                "Liquid Soap", "Makeup", "Lipstick",
                                "Eye Makeup", "Nail Polish", "Hair Gel",
                                "Creme Rinse", "Shampoo", "Hair Spray", "Sunscreen"),
-         pattern = ifelse(pattern == "P1", "Phenols", "Phthalates"))
-
+         pattern = ifelse(pattern == "P1", "Pattern 1", "Pattern 2"))
+#save(heat_gg, file = "./pattern_source_heat_data.rda")
 #Zissou1 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#F21A00"),
 #pdf("./Figures/source_heatmap_adj.pdf", width = 3)
 ggplot(data = heat_gg, aes(x = pattern, y = product)) + 
