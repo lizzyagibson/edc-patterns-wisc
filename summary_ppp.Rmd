@@ -86,12 +86,8 @@ add_ci4interaction <- function(fit, term1, term2) {
               var.mat[term2, term2] +
               2*var.mat[term1, term2]
     
-    # this is st dev
-    #std.Pf  <- 
+    # this is st error NOT std
     ste.Pf  <-  sqrt(abs(var.Pf))
-    
-    # this is st error
-    #ste.Pf  <- std.Pf/sqrt(length(resid(fit))) # SAMPLE SIZE
 
     # compute confidence intervals 
     lci.Pf <- beta.Pf - 1.96*ste.Pf
@@ -110,7 +106,7 @@ add_ci4interaction <- function(fit, term1, term2) {
 }
 
 add_ci4int_bayes = function(fit) {
-int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary[,-c(9:10)]
+int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
 
 ext <- extract(fit)
 
@@ -131,16 +127,16 @@ var_f = covmat[1, 1] +
               2*covmat[1, 2]
 
 # this is std dev not std error
-se_f  <- sqrt(abs(var_f))
+sd_f  <- sqrt(abs(var_f))
+
+# take min sample size as conservative est.
+sampsize = min(int_sum[1,9], int_sum[3,9])
 
 # this is std error
-# ste_f  <- sqrt(abs(var_f))/sqrt(length(resid(fit))) # SAMPLE SIZE
+se_f  <- sd_f/sqrt(sampsize)
 
 lci.f <- mean(beta_f) - 1.96*se_f
 uci.f <- mean(beta_f) + 1.96*se_f
-
-# std error
-stderror_f = se_f/sqrt(9612.772)
 
 # 2 calculate the test statistic: t = Est/SE
 # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
@@ -153,10 +149,10 @@ q = quantile(beta_f, probs = c(0.025, .25, .50, .75, .975)) %>% as.data.frame() 
               values_from = ".")
 
 new_var = tibble(beta = "P in females", mean = round(mean(beta_f), 4), 
-                 se_mean = round(stderror_f,4), sd = round(se_f,4)) %>% 
+                 se_mean = round(se_f,4), sd = round(sd_f,4)) %>% 
           bind_cols(., q)
 
-as.data.frame(int_sum) %>% rownames_to_column(var="beta") %>% 
+as.data.frame(int_sum)[,-c(9:10)] %>% rownames_to_column(var="beta") %>% 
   bind_rows(.,new_var) %>% 
   mutate(beta = ifelse(beta == "beta_p", "P in males", beta))
 }
@@ -475,7 +471,7 @@ main %>%
   geom_smooth(aes(y = pred - 1.96*se), 
               se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
   facet_wrap(.~pattern) + 
-  labs(y = "WISC Scaled Score", x = "Pattern concentration")
+  labs(y = "Full Scale WISC", x = "Pattern concentration")
 ```
 
 ## Bayesian models
@@ -741,7 +737,7 @@ sense_all %>%
   scale_fill_manual(values = pal, labels = c("", "Female", "", "Male")) +
   scale_color_manual(values = pal, labels = c("", "Female", "", "Male")) +
   facet_wrap(.~pattern, scales = "free_x") + 
-  labs(y = "WISC Scaled Score", x = "Pattern concentration") +
+  labs(y = "Full Scale WISC", x = "Pattern concentration") +
   theme(legend.title = element_blank())
 ```
 
