@@ -86,9 +86,13 @@ add_ci4interaction <- function(fit, term1, term2) {
               var.mat[term2, term2] +
               2*var.mat[term1, term2]
     
-    # this is st dev not st error?
-    ste.Pf  <- sqrt(abs(var.Pf))
+    # this is st dev
+    #std.Pf  <- 
+    ste.Pf  <-  sqrt(abs(var.Pf))
     
+    # this is st error
+    #ste.Pf  <- std.Pf/sqrt(length(resid(fit))) # SAMPLE SIZE
+
     # compute confidence intervals 
     lci.Pf <- beta.Pf - 1.96*ste.Pf
     uci.Pf <- beta.Pf + 1.96*ste.Pf
@@ -128,6 +132,9 @@ var_f = covmat[1, 1] +
 
 # this is std dev not std error
 se_f  <- sqrt(abs(var_f))
+
+# this is std error
+# ste_f  <- sqrt(abs(var_f))/sqrt(length(resid(fit))) # SAMPLE SIZE
 
 lci.f <- mean(beta_f) - 1.96*se_f
 uci.f <- mean(beta_f) + 1.96*se_f
@@ -394,13 +401,6 @@ ggplot(data = heat_gg, aes(x = pattern, y = product)) +
 ## Health models
 
 ```{r}
-par(mfrow=c(1,2))
-summary(gam(WISC ~ s(P1, by = SEX) + SEX, data = mn))
-plot(gam(WISC ~ s(P1, by = SEX) + SEX, data = mn)) 
-summary(gam(WISC ~ s(P1, by = SEX) + SEX +
-              M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + HOME_SCORE + M_AGE + SMOKER_IN_HOME, 
-              data = mn))
-
 par(mfrow=c(1,2))
 summary(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn))
 plot(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn)) 
