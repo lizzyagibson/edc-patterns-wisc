@@ -47,7 +47,7 @@ model {
   // beta_c ~ normal(0,5); // student_t(1, 0, 2.5);
   //  beta_p ~ normal(0,5); // student_t(1, 0, 2.5);
   
-  for (n in 1:N) { // draw data from this distribution
+  for (n in 1:N) { // draw patterns scores from this distribution
       WA[n] ~ normal(ewa[n], sd_ewa[n]);
     }
   

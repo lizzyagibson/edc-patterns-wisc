@@ -192,6 +192,20 @@ fit2i <- lm(WISC ~ P2 + SEX + SEX*P2, data = mn)
 add_ci4interaction(fit2i, "P2", "P2:SEXFemale")
 ```
 
+#### What is happening with sex?
+
+```{r}
+summary(lm(WISC ~ SEX + P1 + P1*SEX, data = mn))
+
+do.call(rbind , by(mn$P1, mn$SEX, summary))
+do.call(rbind , by(mn$WISC, mn$SEX, summary))
+```
+
+* Because of interaction term, this would mean that when pattern 1 concentration == zero, males have, on average, 6.9 points higher IQ. Wat?  
+* BUT pattern 1 concentration NEVER == zero, so this is extrapolating beyond the data (bad).  
+* Also, concentrations in females are (slightly) higher than in males, so intercept for females is even farther from data.  
+* 
+
 ### Adjusted
 
 ```{r}
