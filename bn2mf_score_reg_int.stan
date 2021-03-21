@@ -36,17 +36,7 @@ transformed parameters {
 // The model to be estimated.
 //  With no prior in the model block, the effect is an improper prior on all real numbers. 
 model {
-  // sigma ~ inv_gamma(0.001, 0.001); // prior on error
-  // Cite: stat.columbia.edu/~gelman/research/published/taumain.pdf
-  
-  // alpha ~ normal(100, 15); // prior on alpha = IQ
 
-  // beta coefficient priors
-  // student t parameters: degrees of freedom nu, location mu, and scale sigma
-  // smaller nu, fatter tails
-  // beta_c ~ normal(0,5); // student_t(1, 0, 2.5);
-  //  beta_p ~ normal(0,5); // student_t(1, 0, 2.5);
-  
   for (n in 1:N) { // draw patterns scores from this distribution
       WA[n] ~ normal(ewa[n], sd_ewa[n]);
     }
