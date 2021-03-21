@@ -14,6 +14,8 @@ options(mc.cores = parallel::detectCores())
 e_wa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 var_wa <- readMat(here::here("./Data/mn2_WA_var_sd1.mat"))[[1]] %>% as_tibble() %>% rename(varP2 = V1, varP1 = V2)
 
+apply(var_wa, 2, mean)
+
 bayes_int = bind_cols(ppp_cov, e_wa, var_wa) %>% 
         dplyr::select(-GEST, -ETH) %>% 
         rename(HOME_SCORE = HOMETOT) %>% 
@@ -86,6 +88,8 @@ sqrt(mean((apply(y_pred_p2, 2, median) - y)^2))
 # Rhat is the potential scale reduction factor on split chains (at convergence Rhat=1).
 print(p2_fit, c("lp__"))
 print(p2_fit, params)
+
+add_ci4int_bayes(p2_fit)
 
 # plot coefficients
 plot(p2_fit, pars = params, show_density=T, fill_color = "lightblue")
