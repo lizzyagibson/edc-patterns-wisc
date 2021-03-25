@@ -52,8 +52,14 @@ model {
   // PRIOR KNOWLEDGE
   // ave effect of pht in Pam's paper
   // MBP, MBzP, MEHHP, MEHP, MiBP
-  // (-2.69 - 1.18 + 0.16 - 0.30 - 0.17 - 2.69)/5 = -1.374
-  beta_p   ~ normal(-1.37, 2.5*13.4);
+  
+  // beta_p = ave in males
+  // (-1.89-1.48+0.26+0.09-2.92) / 5 = -1.188
+  beta_p   ~ normal(-1.19, 2.5*13.4);
+  
+  // beta_int = ave diff btwn males and females
+  // ((-3.15+1.89) + (-0.84+1.48) + (0.34-0.26) + (-0.05 - 0.09) + (-2.38 + 2.92))/5
+  beta_int   ~ normal(-0.03, 2.5*13.4);  
   
   for (n in 1:N) { // draw patterns scores from this distribution
       WA[n] ~ normal(ewa[n], sd_ewa[n]);
