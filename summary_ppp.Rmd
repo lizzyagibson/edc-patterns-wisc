@@ -165,7 +165,7 @@ as.data.frame(int_sum)[,-c(9:10)] %>% rownames_to_column(var="beta") %>%
 * 3 parabens  
 * 9 phthalates  
 
-```{r, read, cache = TRUE}
+```{r, read,}
 ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
 
@@ -175,8 +175,11 @@ mn = whole %>% filter(P2 < mean(whole$P2) + 5*sd(whole$P2)) %>%
 
 ## Demographics
 
-```{r, demo, cache = TRUE}
-ppp_current = ppp_cov %>% mutate(Subsample = "Study Population") %>% rename(HOME_SCORE = HOMETOT)
+```{r, demo}
+ppp_343 = ppp_cov %>% mutate(Subsample = "Study Population") %>% rename(HOME_SCORE = HOMETOT)
+# 343 with pht/phenol exposure
+ppp_current = ppp_343 %>% filter(!is.na(WISC))
+# 311 with WISC
 
 cohort = mn_demo %>% 
         left_join(., mn_outcome, by = "SID") %>% 
@@ -186,7 +189,8 @@ cohort = mn_demo %>%
 
 demo =  bind_rows(ppp_current, cohort) %>% 
         mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
-        dplyr::select(-SID, -GEST) %>% 
+        dplyr::select(ETH, M_AGE, M_EDU, M_IQ, HOME_SCORE, mat_hard, MARITAL_STATUS, ALCOHOL, SMOKER_IN_HOME, 
+                      SEX, WISC, Subsample) %>% 
         rename(Ethnicity = ETH,
                `Maternal education` = M_EDU,
                `Marital status` = MARITAL_STATUS,
@@ -196,6 +200,7 @@ demo =  bind_rows(ppp_current, cohort) %>%
                `Maternal age at delivery` = M_AGE,
                `Prenatal alcohol consumption` = ALCOHOL,
                `Smoker in home` = SMOKER_IN_HOME,
+               `Material hardship` = mat_hard,
                `Child Full Scale IQ` = WISC) %>% 
         mutate(Subsample = fct_inorder(Subsample))
 
@@ -203,12 +208,11 @@ demo %>% tbl_summary(by = Subsample, missing = "no",
                      statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% 
                      add_p() %>% as_gt() %>% 
         tab_header(title = "Subject demographics and distribution of potential confounders, model covariates, and outcome variable")
-  
 ```
 
 ## Distributions \& dectection
 
-```{r, lod, cache=TRUE}
+```{r, lod}
 lod <- mn_phenol %>% drop_na(BP_3:BPA) %>% 
           rename(B_PB_detect = B_PB_LOD_0_2, TCS_detect = TCS_LOD_2_3, 
                 DCP_24_detect = X24_DCP_LOD_0_2, BP_3_detect = BP_3_LOD_0_4) %>%   
@@ -248,14 +252,19 @@ conc = mn_ppp %>%
   dplyr::select(Chemical:Min, Q25:Q75, Max)
 
 ppp_table <- left_join(detected, conc, by = c("Chemical")) %>%
-  mutate_if(is.numeric, round, digits = 2)
+  mutate_if(is.numeric, round, digits = 1) %>% 
+  mutate(group = case_when(Chemical == "M_PB" ~ "phenols",
+                           grepl("^M", Chemical) ~ "phthalates",
+                           TRUE ~ "phenols")) %>% 
+  arrange(group, Chemical) %>% 
+  dplyr::select(-group)
 
 ppp_table  %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
 ```
 
 ### Chemicals
 
-```{r, fig1, cache = TRUE, fig.height=10, fig.width=12}
+```{r, fig1, fig.height=10, fig.width=12}
 mn_ppp %>% 
   pivot_longer(MEHHP:BPA) %>% 
   mutate(name = str_replace(name, "_", "-")) %>% 
@@ -269,7 +278,7 @@ mn_ppp %>%
 
 ### Correlation
 
-```{r, cache = TRUE, fig.height=7, fig.width=7}
+```{r, fig.height=7, fig.width=7}
 cormat <- get_lower_tri(round(cor(mn_ppp[,-1], use = "complete.obs", 
                                   method = c("spearman")),2))[2:17, 1:16]
 
@@ -294,7 +303,7 @@ ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) +
 ## Exposure patterns
 
 ### Loadings
-```{r, load-load, cache = TRUE}
+```{r, load-load}
 eh <- readMat(here::here("./Data/mn2_EH.mat"))[[1]]
 # ["MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA"];
 
@@ -359,7 +368,7 @@ eh_plot + corr_plot
 
 ### Distributions
 
-```{r, figpc, cache=TRUE, fig.height=7}
+```{r, figpc, fig.height=7}
 ewa %>% 
   pivot_longer(P1:P2) %>% 
   ggplot(aes(x = value)) +
@@ -367,7 +376,7 @@ ewa %>%
   facet_wrap(name~., scales = "free") + 
   labs(y = "Density", x = "")
 
-bind_cols(ppp_current, ewa) %>% 
+bind_cols(ppp_343, ewa) %>% 
   mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>% 
   pivot_longer(P1:P2) %>% 
   ggplot(aes(x = value)) +
@@ -419,7 +428,7 @@ add_ci4interaction(fit_p2, "P2", "P2:SEXFemale")
 
 ```{r}
 fit_p1a <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
-              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME
+              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME + mat_hard
              , data = mn)
 add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
 glance(fit_p1a)[,-c(11:12)]
@@ -429,7 +438,7 @@ glance(fit_p1a)[,-c(11:12)]
 
 ```{r}
 fit_p2a <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE +
-              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME
+              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME + mat_hard
              , data = mn)
 add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")
 glance(fit_p2a)[,-c(11:12)]
@@ -475,103 +484,6 @@ main %>%
   labs(y = "Full Scale WISC", x = "Pattern concentration")
 ```
 
-## Bayesian models
-
-```{r, stan, cache = TRUE}
-load("./Stan/p2_fit_nopriors.rda") # p2_fit
-load("./Stan/p1_fit_nopriors.rda") # p1_fit
-```
-
-### Pattern 1
-
-```{r}
-params = names(p1_fit)[grep("(alpha|sigma|beta)", names(p1_fit))]
-print(p1_fit, params)
-```
-
-### Pattern 2
-
-```{r}
-params = names(p2_fit)[grep("(alpha|sigma|beta)", names(p2_fit))]
-print(p2_fit, params)
-```
-
-### Posterior prediction
-
-#### Pattern 1
-
-```{r}
-bayes_int = mn %>% 
-        dplyr::select(-GEST, -ETH) %>% 
-        drop_na()
-y = bayes_int$WISC
-
-# Extract fit
-ext_p1 <- extract(p1_fit)
-
-y_pred_p1 = ext_p1$y_tilde
-
-# random sample of y
-samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
-y_post_samp_p1 = y_pred_p1[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p1)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-
-### Coefficients of interest
-
-#### Pattern 1
-
-```{r}
-# Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p1_fit,
-           pars = params[(length(params)-2):length(params)],
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "beta_int" = "Interaction", 
-  "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males"))
-```
-
-#### Pattern 2
-
-```{r}
-# Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p2_fit,
-           pars = params[(length(params)-2):length(params)],
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "beta_int" = "Interaction", 
-  "beta_sex" =  "Sex female",
-  "beta_p" = "P2 in males"))
-```
-
-### Patterns by sex
-
-#### Pattern 1
-
-```{r}
-add_ci4int_bayes(p1_fit)
-```
-
-#### Pattern 2
-
-```{r}
-add_ci4int_bayes(p2_fit)
-```
-
   <br>  
   <br>  
   <br>  
@@ -604,11 +516,11 @@ add_ci4int_bayes(p2_fit)
   
 **Are the people missing WISC the same as the people missing HOME?**  
   
-There are `r ppp_current %>% filter(is.na(HOME_SCORE)) %>% nrow()` people missing `HOME` and `r ppp_current %>% filter(!is.na(WISC) & is.na(HOME_SCORE)) %>% nrow()` people missing `HOME` but not `WISC`. This is `r round((16/(343-32))*100, 2)`% of 311 (total with WISC).  
+There are `r ppp_343 %>% filter(is.na(HOME_SCORE)) %>% nrow()` people missing `HOME` and `r ppp_343 %>% filter(!is.na(WISC) & is.na(HOME_SCORE)) %>% nrow()` people missing `HOME` but not `WISC`. This is `r round((16/(343-32))*100, 2)`% of 311 (total with WISC).  
   
 **Are the people missing WISC the same as the people missing maternal IQ?**  
   
-There are `r ppp_current %>% filter(is.na(M_IQ)) %>% nrow()` people missing `maternal IQ` and `r ppp_current %>% filter(!is.na(WISC) & is.na(M_IQ)) %>% nrow()` people missing `maternal IQ` but not `WISC`. This is `r round((8/(343-32))*100,2)`% of 311. Two people are missing both `HOME` and `maternal IQ`.
+There are `r ppp_343 %>% filter(is.na(M_IQ)) %>% nrow()` people missing `maternal IQ` and `r ppp_343 %>% filter(!is.na(WISC) & is.na(M_IQ)) %>% nrow()` people missing `maternal IQ` but not `WISC`. This is `r round((8/(343-32))*100,2)`% of 311. Two people are missing both `HOME` and `maternal IQ`.
   
 **Can age 9 HOME predict age 7?**  
   
