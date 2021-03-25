@@ -43,13 +43,8 @@ model {
   
   alpha ~ normal(100, 45); // prior on alpha = IQ
 
-  // beta coefficient priors
-  // defaults rstanarm = 2.5*std(y)
-  beta_c   ~ normal(0, 2.5*13.4);
-  beta_sex ~ normal(0, 2.5*13.4);
-  beta_int ~ normal(0, 2.5*13.4);
-  
-  beta_p   ~ normal(0, 2.5);
+  // No known associations with FSIQ
+  beta_p   ~ normal(0, 2.5*13.4);
   
   for (n in 1:N) { // draw patterns scores from this distribution
       WA[n] ~ normal(ewa[n], sd_ewa[n]);

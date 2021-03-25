@@ -49,7 +49,11 @@ model {
   beta_sex ~ normal(0, 2.5*13.4);
   beta_int ~ normal(0, 2.5*13.4);
   
-  beta_p   ~ normal(0, 2.5);
+  // PRIOR KNOWLEDGE
+  // ave effect of pht in Pam's paper
+  // MBP, MBzP, MEHHP, MEHP, MiBP
+  // (-2.69 - 1.18 + 0.16 - 0.30 - 0.17 - 2.69)/5 = -1.374
+  beta_p   ~ normal(-1.37, 2.5*13.4);
   
   for (n in 1:N) { // draw patterns scores from this distribution
       WA[n] ~ normal(ewa[n], sd_ewa[n]);

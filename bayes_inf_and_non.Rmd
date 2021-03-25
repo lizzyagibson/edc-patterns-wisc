@@ -181,6 +181,12 @@ as.data.frame(model_sum)[,-c(9:10)] %>%
 e_wa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
 var_wa <- readMat(here::here("./Data/mn2_WA_var_sd1.mat"))[[1]] %>% as_tibble() %>% rename(varP2 = V1, varP1 = V2)
 
+summary(e_wa)
+apply(e_wa, 2, sd)
+
+summary(var_wa)
+apply(var_wa, 2, sd)
+
 bayes = bind_cols(ppp_cov, e_wa, var_wa) %>% 
         dplyr::select(-GEST, -ETH) %>% 
         rename(HOME_SCORE = HOMETOT) %>% 
@@ -195,6 +201,8 @@ x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALC
                  data = bayes)[,-1]
 sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
 y = bayes$WISC
+sd(y)
+
 P2 = bayes$P2
 P1 = bayes$P1
 
@@ -223,7 +231,7 @@ p1_data = list(N = N,
 
 ## Bayesian models
 
-```{r, stan}
+```{r}
 # p2_non <- stan(
 #   file = "bn2mf_score_reg_int.stan",  # Stan program
 #     data = p2_data,               # named list of data
@@ -232,7 +240,7 @@ p1_data = list(N = N,
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
 # save(p2_non, file = "./Stan/pattern2_noninf_fit.rda")
-# 
+
 # p1_non <- stan(
 #   file = "bn2mf_score_reg_int.stan",  # Stan program
 #     data = p1_data,               # named list of data
@@ -241,28 +249,52 @@ p1_data = list(N = N,
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
 # save(p1_non, file = "./Stan/pattern1_noninf_fit.rda")
-# 
+
 # p2_inf <- stan(
-#   file = "bn2mf_score_reg_int_inf.stan",  # Stan program
+#   file = "bn2mf_score_reg_int_infp2.stan",  # Stan program
 #     data = p2_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
 # save(p2_inf, file = "./Stan/pattern2_inf_fit.rda")
-# 
+
 # p1_inf <- stan(
-#   file = "bn2mf_score_reg_int_inf.stan",  # Stan program
+#   file = "bn2mf_score_reg_int_infp1.stan",  # Stan program
 #     data = p1_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
 # save(p1_inf, file = "./Stan/pattern1_inf_fit.rda")
+
+# p2_infpnonc <- stan(
+#   file = "bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
+#     data = p2_data,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p2_infpnonc, file = "./Stan/pattern2_infp2nonc_fit.rda")
+
+# p1_infpnonc <- stan(
+#   file = "bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
+#     data = p1_data,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p1_infpnonc, file = "./Stan/pattern1_infp1nonc_fit.rda")
+```
+
+```{r, stan}
 load("./Stan/pattern2_noninf_fit.rda")
 load("./Stan/pattern2_inf_fit.rda")
 load("./Stan/pattern1_noninf_fit.rda")
 load("./Stan/pattern1_inf_fit.rda")
+
+load("./Stan/pattern2_infp_nonc.rda")
+load("./Stan/pattern1_infp_nonc.rda")
 ```
 
 ### Summary
