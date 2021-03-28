@@ -16,6 +16,7 @@ library(haven)
 library(tidyverse)
 library(RColorBrewer)
 library(mgcv)
+library(EnvStats)
 library(janitor)
 library(gt)
 library(reshape2)
@@ -166,10 +167,10 @@ as.data.frame(int_sum)[,-c(9:10)] %>% rownames_to_column(var="beta") %>%
 * 9 phthalates  
 
 ```{r, read,}
-ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
+ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
 whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
 
-mn = whole %>% filter(P2 < mean(whole$P2) + 5*sd(whole$P2)) %>% 
+mn = whole %>% filter(P1 < mean(whole$P1) + 5*sd(whole$P1)) %>% 
   mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
 ```
 
@@ -208,6 +209,11 @@ demo %>% tbl_summary(by = Subsample, missing = "no",
                      statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% 
                      add_p() %>% as_gt() %>% 
         tab_header(title = "Subject demographics and distribution of potential confounders, model covariates, and outcome variable")
+
+# demo %>% filter(Subsample == "Study Population") %>% 
+#          tbl_summary(missing = "no",
+#          statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% 
+#         as_kable_extra(., format = "latex")
 ```
 
 ## Distributions \& dectection
@@ -252,14 +258,20 @@ conc = mn_ppp %>%
   dplyr::select(Chemical:Min, Q25:Q75, Max)
 
 ppp_table <- left_join(detected, conc, by = c("Chemical")) %>%
-  mutate_if(is.numeric, round, digits = 1) %>% 
+  mutate_if(is.numeric, round, digits = 2) %>% 
   mutate(group = case_when(Chemical == "M_PB" ~ "phenols",
                            grepl("^M", Chemical) ~ "phthalates",
                            TRUE ~ "phenols")) %>% 
   arrange(group, Chemical) %>% 
   dplyr::select(-group)
 
-ppp_table  %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
+ppp_table  
+
+# %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during # the third trimester of pregnancy (n = 343)")
+
+# ppp_table %>% 
+#   dplyr::select(1:2, 6:8) %>% 
+#   stargazer::stargazer(summary = F)
 ```
 
 ### Chemicals
@@ -309,7 +321,7 @@ eh <- readMat(here::here("./Data/mn2_EH.mat"))[[1]]
 
 colnames(eh) <- c("MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA")
 
-applied <- eh[2:1,] %>% 
+applied <- eh %>% 
   as_tibble() %>% 
   mutate(Pattern = 1:2) %>% 
   gather(key = Chemicals, value = Loadings, -Pattern) %>%
@@ -428,8 +440,9 @@ add_ci4interaction(fit_p2, "P2", "P2:SEXFemale")
 
 ```{r}
 fit_p1a <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
-              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME + mat_hard
+              MARITAL_STATUS + HOME_SCORE + mat_hard
              , data = mn)
+summary(fit_p1a)
 add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
 glance(fit_p1a)[,-c(11:12)]
 ```
@@ -438,10 +451,12 @@ glance(fit_p1a)[,-c(11:12)]
 
 ```{r}
 fit_p2a <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE +
-              MARITAL_STATUS + HOME_SCORE + SMOKER_IN_HOME + mat_hard
+              MARITAL_STATUS + HOME_SCORE + mat_hard
              , data = mn)
 add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")
 glance(fit_p2a)[,-c(11:12)]
+
+summary(fit_p2a)
 ```
 
 ### Viz
@@ -452,7 +467,7 @@ pred_2 = predict(fit_p2a, se.fit = TRUE)
 
 # Subset so that n matches regression results
 mn_subset = mn %>% dplyr::select(SID, WISC, P_1 = P1, P_2 = P2, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,
-                                 MARITAL_STATUS, HOME_SCORE, SMOKER_IN_HOME) %>% drop_na() %>% 
+                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
               mutate(model = "Main Model")
 
 pred = bind_cols(mn_subset, pred_1 = pred_1$fit, se_1 = pred_1$se.fit,
@@ -461,7 +476,7 @@ pred = bind_cols(mn_subset, pred_1 = pred_1$fit, se_1 = pred_1$se.fit,
 # Combine predicted outcomes with data
 main = 
   pred %>% 
-  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, SMOKER_IN_HOME, M_AGE)) %>% 
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, M_AGE)) %>% 
   mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>%
   pivot_longer(c(P_1:P_2, pred_1:se_2),
                names_to = c("term", "pattern"),
@@ -481,7 +496,55 @@ main %>%
   geom_smooth(aes(y = pred - 1.96*se), 
               se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
   facet_wrap(.~pattern) + 
-  labs(y = "Full Scale WISC", x = "Pattern concentration")
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration")
+```
+
+### Viz Pattern 1
+
+```{r}
+pred_one = main %>% filter(pattern == "1")
+
+sum_one = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
+
+female_se = sum_one[12, 3][[1]]
+male_se = sum_one[2, 3][[1]]
+
+pred_one %>% 
+  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = pred,
+              ymin = after_stat(y) - male_se*1.96,
+              ymax = after_stat(y) + male_se*1.96),
+              method = "lm", fullrange = TRUE, alpha = 0.3,
+              data = subset(pred_one, SEX == "Male")) +
+  # geom_abline(slope = -3.45, intercept = 100) +
+  geom_smooth(aes(y = pred,
+              ymin = after_stat(y) - female_se*1.96,
+              ymax = after_stat(y) + female_se*1.96),
+              method = "lm", fullrange = TRUE, alpha = 0.3,
+              data = subset(pred_one, SEX == "Female")) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+
+pred_one %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = pred),
+              method = "lm", fullrange = TRUE, se=F) +
+  geom_smooth(aes(y = pred + 1.96*se), 
+              se=F, linetype = "dotted", size = 0.5,
+              method = "lm", fullrange = TRUE) +
+  geom_smooth(aes(y = pred - 1.96*se), 
+              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
 ```
 
   <br>  
@@ -630,7 +693,7 @@ sense_all %>%
   scale_fill_manual(values = pal, labels = c("", "Female", "", "Male")) +
   scale_color_manual(values = pal, labels = c("", "Female", "", "Male")) +
   facet_wrap(.~pattern, scales = "free_x") + 
-  labs(y = "Full Scale WISC", x = "Pattern concentration") +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
   theme(legend.title = element_blank())
 ```
 
