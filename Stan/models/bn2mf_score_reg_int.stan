@@ -1,3 +1,5 @@
+// Noninformative priors on everything
+
 // The input data.
 data {
   int<lower=0> N;   // number of observations
