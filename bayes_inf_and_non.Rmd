@@ -162,10 +162,10 @@ new_var = tibble(beta = "p in females", mean = round(mean(beta_f), 4),
                  se_mean = round(se_f,4), sd = round(sd_f,4)) %>% 
           bind_cols(., q)
 
-# M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + SMOKER_IN_HOME + mat_hard
+# M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
 as.data.frame(model_sum)[,-c(9:10)] %>% 
   rownames_to_column(var="beta") %>% 
-  mutate(beta = c("alpha", "age", "edu", "marital", "home", "iq", "alcohol", "smoker", "mat_hard",
+  mutate(beta = c("alpha", "age", "edu", "marital", "home", "iq", "alcohol", "mat_hard",
                   "sex*p", "sex", "p in males")) %>% 
   bind_rows(.,new_var) %>% 
   mutate_at(vars(2:9), round, 2)
@@ -179,21 +179,21 @@ as.data.frame(model_sum)[,-c(9:10)] %>%
 * 9 phthalates  
 
 ```{r, dat}
-e_wa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
-var_wa <- readMat(here::here("./Data/mn2_WA_var_sd1.mat"))[[1]] %>% as_tibble() %>% rename(varP2 = V1, varP1 = V2)
+e_wa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
+var_wa <- readMat(here::here("./Data/mn2_WA_var_sd1.mat"))[[1]] %>% as_tibble() %>% rename(varP1 = V1, varP2 = V2)
 
 bayes = bind_cols(ppp_cov, e_wa, var_wa) %>% 
         dplyr::select(-GEST, -ETH) %>% 
         rename(HOME_SCORE = HOMETOT) %>% 
-        filter(P2 < mean(P2) + 5*sd(P2)) %>% # removes two females, 1 male
+        filter(P1 < mean(P1) + 5*sd(P1)) %>% # removes two females, 1 male
         drop_na() %>% 
         mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
         mutate_if(is.character, as_factor)
 
 # For stan model ####
 N = nrow(bayes)
-C = ncol(bayes) - 6 - 1
-x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + SMOKER_IN_HOME + mat_hard, 
+C = ncol(bayes) - 6 - 1 -1
+x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
                  data = bayes)[,-1]
 sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
 y = bayes$WISC
@@ -229,67 +229,67 @@ p1_data = list(N = N,
 
 ```{r}
 # p2_non <- stan(
-#   file = "bn2mf_score_reg_int.stan",  # Stan program
+#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
 #     data = p2_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p2_non, file = "./Stan/pattern2_noninf_fit.rda")
-# 
+# save(p2_non, file = "./Stan/fits/pattern2_noninf_fit.rda")
+
 # p1_non <- stan(
-#   file = "bn2mf_score_reg_int.stan",  # Stan program
+#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
 #     data = p1_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p1_non, file = "./Stan/pattern1_noninf_fit.rda")
-# 
+# save(p1_non, file = "./Stan/fits/pattern1_noninf_fit.rda")
+
 # p2_inf <- stan(
-#   file = "bn2mf_score_reg_int_infp2.stan",  # Stan program
+#   file = "./Stan/models/bn2mf_score_reg_int_infp2.stan",  # Stan program
 #     data = p2_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p2_inf, file = "./Stan/pattern2_inf_fit.rda")
+# save(p2_inf, file = "./Stan/fits/pattern2_inf_fit.rda")
 # 
 # p1_inf <- stan(
-#   file = "bn2mf_score_reg_int_infp1.stan",  # Stan program
+#   file = "./Stan/models/bn2mf_score_reg_int_infp1.stan",  # Stan program
 #     data = p1_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p1_inf, file = "./Stan/pattern1_inf_fit.rda")
+# save(p1_inf, file = "./Stan/fits/pattern1_inf_fit.rda")
 # 
 # p2_infpnonc <- stan(
-#   file = "bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
+#   file = "./Stan/models/bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
 #     data = p2_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p2_infpnonc, file = "./Stan/pattern2_infp2nonc_fit.rda")
+# save(p2_infpnonc, file = "./Stan/fits/pattern2_infp2nonc_fit.rda")
 # 
 # p1_infpnonc <- stan(
-#   file = "bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
+#   file = "./Stan/models/bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
 #     data = p1_data,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p1_infpnonc, file = "./Stan/pattern1_infp1nonc_fit.rda")
+# save(p1_infpnonc, file = "./Stan/fits/pattern1_infp1nonc_fit.rda")
 ```
 
 ```{r, stan}
-load("./Stan/pattern2_noninf_fit.rda")
-load("./Stan/pattern2_inf_fit.rda")
-load("./Stan/pattern1_noninf_fit.rda")
-load("./Stan/pattern1_inf_fit.rda")
-load("./Stan/pattern2_infp2nonc_fit.rda")
-load("./Stan/pattern1_infp1nonc_fit.rda")
+load("./Stan/fits/pattern2_noninf_fit.rda")
+load("./Stan/fits/pattern2_inf_fit.rda")
+load("./Stan/fits/pattern1_noninf_fit.rda")
+load("./Stan/fits/pattern1_inf_fit.rda")
+load("./Stan/fits/pattern2_infp2nonc_fit.rda")
+load("./Stan/fits/pattern1_infp1nonc_fit.rda")
 ```
 
 ### Summary
@@ -517,7 +517,7 @@ mcmc_areas(p2_non,
   scale_y_discrete(labels=c(
   "beta_int" = "Interaction", 
   "beta_sex" =  "Sex female",
-  "beta_p" = "P2 in males")) + xlim(c(-14,14))
+  "beta_p" = "P2 in males")) + xlim(c(-17,17))
 ```
 
 ##### Informative Pattern
@@ -531,7 +531,7 @@ mcmc_areas(p2_inf,
   scale_y_discrete(labels=c(
   "beta_int" = "Interaction", 
   "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males")) + xlim(c(-14,14))
+  "beta_p" = "P1 in males")) + xlim(c(-17,17))
 ```
 
 ##### Informative Everything
@@ -545,7 +545,7 @@ mcmc_areas(p2_infpnonc,
   scale_y_discrete(labels=c(
   "beta_int" = "Interaction", 
   "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males")) + xlim(c(-14,14))
+  "beta_p" = "P1 in males")) + xlim(c(-17,17))
 ```
 
 ### Patterns by sex
