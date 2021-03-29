@@ -109,9 +109,12 @@ add_ci4interaction <- function(fit, term1, term2) {
 add_ci4int_bayes = function(fit) {
 int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
 
+params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
+model_sum = summary(fit, params)$summary
+
 ext <- extract(fit)
 
-post_coef = cbind(ext$alpha, ext$sigma, ext$beta_c, 
+post_coef = cbind(ext$alpha, ext$beta_c, 
                      ext$beta_int, ext$beta_sex, ext$beta_p) %>% as_tibble()
 
 colnames(post_coef) = params
@@ -150,13 +153,17 @@ q = quantile(beta_f, probs = c(0.025, .25, .50, .75, .975)) %>% as.data.frame() 
   pivot_wider(names_from = "rowname",
               values_from = ".")
 
-new_var = tibble(beta = "P in females", mean = round(mean(beta_f), 4), 
+new_var = tibble(beta = "p in females", mean = round(mean(beta_f), 4), 
                  se_mean = round(se_f,4), sd = round(sd_f,4)) %>% 
           bind_cols(., q)
 
-as.data.frame(int_sum)[,-c(9:10)] %>% rownames_to_column(var="beta") %>% 
+# M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
+as.data.frame(model_sum)[,-c(9:10)] %>% 
+  rownames_to_column(var="beta") %>% 
+  mutate(beta = c("alpha", "age", "edu", "marital", "home", "iq", "alcohol", "mat_hard",
+                  "sex*p", "sex", "p in males")) %>% 
   bind_rows(.,new_var) %>% 
-  mutate(beta = ifelse(beta == "beta_p", "P in males", beta))
+  mutate_at(vars(2:9), round, 2)
 }
 ```
 
@@ -545,6 +552,25 @@ pred_one %>%
         legend.text = element_text(size = 15),
         legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
         legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+```
+
+```{r}
+load("./Stan/fits/pattern1_noninf_fit.rda")
+add_ci4int_bayes(p1_non)
+
+y = bayes$WISC
+
+# Extract fit
+ext_p1 <- extract(p1_non)
+str(ext_p1)
+
+y_pred_p1 = ext_p1$y_tilde
+
+# random sample of y
+samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
+y_post_samp_p1 = y_pred_p1[samp,]
+
+
 ```
 
   <br>  
