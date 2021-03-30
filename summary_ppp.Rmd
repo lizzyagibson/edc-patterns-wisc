@@ -466,6 +466,39 @@ glance(fit_p2a)[,-c(11:12)]
 summary(fit_p2a)
 ```
 
+#### Table
+
+```{r}
+tabp1 = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")[c(2,11:12),] %>% mutate(pattern = "Pattern 1")
+tabp2 = add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")[c(2,11:12),] %>% mutate(pattern = "Pattern 2")
+
+load("./Stan/fits/pattern1_noninf_fit.rda")
+bayesp1 = add_ci4int_bayes(p1_non)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
+
+load("./Stan/fits/pattern2_noninf_fit.rda")
+bayesp2 = add_ci4int_bayes(p2_non)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
+
+tabfreq = bind_rows(tabp1, tabp2)[,c(1:2, 6:8)] %>% mutate(model = "Traditional")
+
+tabbayes = bind_rows(bayesp1, bayesp2)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
+            rename(term = beta, estimate = `50%`) %>% 
+            rename_all(~str_replace(., "%", " %")) %>% 
+            mutate(model = "Bayesian")
+
+model_table = bind_rows(tabfreq, tabbayes) %>% dplyr::select(model, pattern, everything()) %>% 
+  arrange(model, pattern, term) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  mutate(`95% Confidence Interval` = str_c("(", `2.5 %`, ", ", `97.5 %`, ")")) %>% 
+  mutate(term = case_when(term == "sex*p" | grepl("SEX", term) ~ " interaction term",
+                          TRUE ~ term),
+         term = str_remove(term, "(P1|P2|p)"),
+         term = str_c(pattern, term)) %>% 
+    dplyr::select(-`2.5 %`, -`97.5 %`, -pattern)
+
+stargazer::stargazer(model_table, summary = F)
+```
+
+
 ### Viz
 
 ```{r, fig.height=7}
@@ -516,6 +549,8 @@ sum_one = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
 female_se = sum_one[12, 3][[1]]
 male_se = sum_one[2, 3][[1]]
 
+# CI = beta confidence interval
+# slope +/- 2*standard error of slope
 pred_one %>% 
   mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
   ggplot(aes(x = P, fill = SEX, color = SEX)) +
@@ -531,12 +566,17 @@ pred_one %>%
               ymax = after_stat(y) + female_se*1.96),
               method = "lm", fullrange = TRUE, alpha = 0.3,
               data = subset(pred_one, SEX == "Female")) +
+  # geom_abline(slope = bayes_f_slope, intercept = 100) +
+  # geom_abline(slope = bayes_f_slope, intercept = 100+bayes_female_up) +
+  # geom_abline(slope = bayes_f_slope, intercept = 100-bayes_female_low) +
   labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 15),
         legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
         legend.background = element_rect(fill = "#ffffffaa", colour = NA))
 
+# CI = prediction confidence interval
+# pred value +/- 2*se of prediction
 pred_one %>% 
   ggplot(aes(x = P, fill = SEX, color = SEX)) +
   geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
@@ -556,21 +596,69 @@ pred_one %>%
 
 ```{r}
 load("./Stan/fits/pattern1_noninf_fit.rda")
-add_ci4int_bayes(p1_non)
+bayes_sum = add_ci4int_bayes(p1_non)
 
-y = bayes$WISC
+bayes_f_slope = bayes_sum[12,7]
+bayes_m_slope = bayes_sum[11,7]
 
+bayes_female_up = bayes_sum[12,9] - bayes_sum[12,7]
+bayes_female_low = -(bayes_sum[12,5] - bayes_sum[12,7])
+
+bayes_male_up = bayes_sum[11,9] - bayes_sum[11,7]
+bayes_male_low = -(bayes_sum[11,5] -bayes_sum[11,7])
+  
 # Extract fit
 ext_p1 <- extract(p1_non)
 str(ext_p1)
 
 y_pred_p1 = ext_p1$y_tilde
 
-# random sample of y
-samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
-y_post_samp_p1 = y_pred_p1[samp,]
+y_median = apply(y_pred_p1, 2, median)
+y_upper = apply(y_pred_p1, 2, quantile, .975)
+y_lower = apply(y_pred_p1, 2, quantile, .025)
 
+y_all = tibble(y_median, y_lower, y_upper)
 
+pred_bayes = bind_cols(pred_one, y_all)
+
+pred_bayes %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = y_median),
+              method = "lm", fullrange = TRUE, se=F) +
+  geom_smooth(aes(y = y_lower), 
+              se=F, linetype = "dotted", size = 0.5,
+              method = "lm", fullrange = TRUE) +
+  geom_smooth(aes(y = y_upper), 
+              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+
+pred_bayes %>% 
+  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = y_median,
+              ymin = after_stat(y) - bayes_male_low,
+              ymax = after_stat(y) + bayes_male_up),
+              method = "lm", fullrange = TRUE, alpha = 0.3,
+              data = subset(pred_bayes, SEX == "Male")) +
+  geom_abline(slope = bayes_f_slope, intercept = 100) +
+  geom_abline(slope = bayes_f_slope, intercept = 100+bayes_female_up) +
+  geom_abline(slope = bayes_f_slope, intercept = 100-bayes_female_low) +
+  geom_smooth(aes(y = pred,
+              ymin = after_stat(y) - bayes_female_low,
+              ymax = after_stat(y) + bayes_female_up),
+              method = "lm", fullrange = TRUE, alpha = 0.3,
+              data = subset(pred_bayes, SEX == "Female")) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
 ```
 
   <br>  
