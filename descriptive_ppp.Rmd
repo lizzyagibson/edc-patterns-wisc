@@ -195,20 +195,35 @@ cormat <- get_lower_tri(round(cor(mn_ppp[,-1], use = "complete.obs",
 
 melted_cormat <- melt(cormat) %>% 
   rename(Correlation = value) %>% 
-  mutate(Var1 = str_replace(Var1, "_", "-"),
-    Var1 = fct_inorder(Var1),
-    Var2 = str_replace(Var2, "_", "-"),
-    Var2 = fct_inorder(Var2))
+  mutate(Var1 = case_when(Var1 == "DCP_24" ~ "24-DCP",
+                          Var1 == "DCP_25" ~ "25-DCP",
+                          Var1 == "BP_3" ~ "BP-3",
+                          TRUE ~ as.character(Var1)),
+         Var2 = case_when(Var2 == "DCP_24" ~ "24-DCP",
+                          Var2 == "DCP_25" ~ "25-DCP",
+                          Var2 == "BP_3" ~ "BP-3",
+                          TRUE ~ as.character(Var2)),
+    Var1 = fct_inorder(str_remove(Var1, "_")),
+    Var2 = fct_inorder(str_remove(Var2, "_"))) %>% as_tibble()
+
+newcol <- colorRampPalette(brewer.pal(9, 'Blues'))
+ncols <- 100
+bluecols2 <- newcol(ncols) #apply the function to get 100 colours
+pie(rep(1, ncols), col = bluecols2, border = NA, labels = NA)
 
 #pdf("./Figures/ppp_corr.pdf")
-ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
+melted_cormat %>% 
+  ggplot(aes(x = Var1, y = Var2)) + 
   geom_tile(aes(fill = Correlation), color = "white") + 
   scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00",
-                       na.value = "grey80") +
+                       na.value = "grey90") +
+  #scale_fill_distiller(palette="RdYlBu",
+  #                     na.value = "grey90") +
   labs(x = "", y = "", title = "") + 
   theme_test(base_size = 20) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 10),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 15),
         legend.position = "bottom")
 #dev.off()
 ```

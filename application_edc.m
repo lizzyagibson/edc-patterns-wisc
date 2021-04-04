@@ -113,6 +113,12 @@ EH_denom = sum(EH, 2);
 EH_scaled = EH ./ EH_denom;
 EWA_scaled = EWA * diag(EH_denom);
 
+% scale varWA by normalization constant
+% var(aX) = a^2var(x)
+varWA_scaled = varWA * diag(EH_denom.^2);
+            
+varH_scaled = varH .* (1./(EH_denom.^2));
+
 %% SAVE 
 %[EWA, EH, varH, alphaH, betaH, alphaW, betaW, alphaA, betaA, varWA]
 
@@ -121,6 +127,6 @@ save("/Users/lizzy/ppp_patterns/Data/mn2_EH.mat", 'EH_scaled');
 
 save("/Users/lizzy/ppp_patterns/Data/mn2_WA_upper.mat", 'upper_ci_WA');
 save("/Users/lizzy/ppp_patterns/Data/mn2_WA_lower.mat", 'lower_ci_WA');
-save("/Users/lizzy/ppp_patterns/Data/mn2_WA_var.mat", 'varWA');
+save("/Users/lizzy/ppp_patterns/Data/mn2_WA_var.mat", 'varWA_scaled');
 
 save("/Users/lizzy/ppp_patterns/Data/mn2_all.mat");

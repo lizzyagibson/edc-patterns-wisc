@@ -181,6 +181,10 @@ mn = whole %>% filter(P1 < mean(whole$P1) + 5*sd(whole$P1)) %>%
   mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
 ```
 
+```{r}
+summary(ewa)
+```
+
 ## Demographics
 
 ```{r, demo}

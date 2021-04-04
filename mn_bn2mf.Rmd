@@ -62,14 +62,17 @@ unique(applied$Chemicals)
 ```
 
 ```{r}
-pdf("./Figures/mn2_edc_loadings_flip.pdf", width = 15, height=9)
+ggsci[1:2]
+
+#pdf("./Figures/mn2_edc_loadings_flip.pdf", width = 15, height=9)
 applied %>% 
   mutate(Chemicals = fct_inorder(Chemicals)) %>%
   ggplot(aes(x = Loadings, y = Chemicals, color = Class)) + 
   geom_point(size = 4) +
   geom_segment(aes(yend = Chemicals, xend = 0), size = 1.5) +
   facet_wrap(.~Pattern, scales = "free_x") +
-  scale_color_brewer(palette = "Dark2") +
+  scale_color_manual(values = ggsci[2:3]) +
+  #scale_color_brewer(palette = "Set2") +
   #theme_bw(base_size = 25) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
         axis.text.y = element_text(size = 25),
@@ -77,12 +80,12 @@ applied %>%
         #strip.background = element_blank(),
         strip.text = element_text(size = 20),
         legend.title = element_blank(),
-        legend.text = element_text(size = 20),
+        legend.text = element_text(size = 22),
+        legend.direction = "vertical",
         legend.position = c(0.91, 0.1), # c(1,0) right bottom, c(1,1) right top.
         legend.background = element_rect(fill = "#ffffffaa", colour = NA)) +
-  expand_limits(y=0) +
-  scale_fill_nejm()
-dev.off()
+  expand_limits(y=0)
+#dev.off()
 ```
 
 ## Compare

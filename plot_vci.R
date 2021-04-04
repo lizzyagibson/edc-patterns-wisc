@@ -36,7 +36,7 @@ upper = upper %>%
                values_to = "upper")
 
 vci = full_join(lower, ewa) %>% full_join(., upper) %>% 
-  mutate(pattern = ifelse(pattern == "V1", "Pattern 2", "Pattern 1"))
+  mutate(pattern = ifelse(pattern == "V1", "Pattern 1", "Pattern 2"))
 
 vci %>% group_by(pattern) %>% 
   summarise(max = max(ewa),
@@ -44,11 +44,13 @@ vci %>% group_by(pattern) %>%
 vci %>% 
   arrange((ewa))
 
-#pdf("./Figures/scores_w_vci.pdf")
+pdf("./Figures/scores_w_vci.pdf")
 vci %>% 
   mutate(id = as.factor(id)) %>% 
-  filter(id %in% sample(1:343, 10)) %>% 
-  #filter(id %in% c(78, 172, 164, 90, 319, 307, 102, 22, sample(1:343, 2))) %>% # Highest and lowest
+  #filter(id %in% sample(1:343, 10)) %>% 
+  filter(id %in% c(78, 172, 164, 90, 319, 307, 102, 22, sample(1:343, 2))) %>% # Highest and lowest
+  arrange(pattern, id) %>% 
+  mutate(id = fct_reorder(id, ewa)) %>% 
   arrange(pattern, id) %>% 
   mutate(id2 = as.factor(rep(1:10, 2))) %>% 
   ggplot(aes(x = id2, y = ewa, group = pattern, fill = pattern)) +
@@ -56,11 +58,16 @@ vci %>%
   geom_col(width = 0.7, position = position_dodge(0.8), color = "black") +
   geom_errorbar(aes(ymin = lower, ymax = upper), 
                 position = position_dodge(.8), color = "black", width = 0.3) +
-  theme(legend.position = "bottom") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 22),
+        legend.direction = "vertical",
+        legend.position = c(0.2, 0.87), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA)) +
   labs(x ="Study participants",
        y = "Individual scores") +
   scale_fill_manual(values = c("#0072B5", "#E18727"))
-#dev.off()
+dev.off()
 
 # ggsci_db$"nejm"$"default" <- c(
 #   "TallPoppy" = "#BC3C29", "DeepCerulean" = "#0072B5",
