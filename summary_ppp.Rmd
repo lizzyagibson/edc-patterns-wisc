@@ -456,6 +456,7 @@ fit_p1a <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
 summary(fit_p1a)
 add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
 glance(fit_p1a)[,-c(11:12)]
+save(fit_p1a, file = "reg_pat1_fit.rda")
 ```
 
 #### Pattern 2
@@ -564,15 +565,14 @@ pred_one %>%
               ymax = after_stat(y) + male_se*1.96),
               method = "lm", fullrange = TRUE, alpha = 0.3,
               data = subset(pred_one, SEX == "Male")) +
-  # geom_abline(slope = -3.45, intercept = 100) +
+  geom_smooth(aes(y = pred+1.96*se), color="green",
+              method = "lm", fullrange = TRUE, se = F,
+              data = subset(pred_one, SEX == "Male")) +
   geom_smooth(aes(y = pred,
               ymin = after_stat(y) - female_se*1.96,
               ymax = after_stat(y) + female_se*1.96),
               method = "lm", fullrange = TRUE, alpha = 0.3,
               data = subset(pred_one, SEX == "Female")) +
-  # geom_abline(slope = bayes_f_slope, intercept = 100) +
-  # geom_abline(slope = bayes_f_slope, intercept = 100+bayes_female_up) +
-  # geom_abline(slope = bayes_f_slope, intercept = 100-bayes_female_low) +
   labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 15),
@@ -591,6 +591,9 @@ pred_one %>%
               method = "lm", fullrange = TRUE) +
   geom_smooth(aes(y = pred - 1.96*se), 
               se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
+  geom_ribbon(aes(y = pred, ymin = stat(y) - 1.96*se, ymax = stat(y) + 1.96*se), 
+              stat = "smooth", method = "lm", fullrange = T, alpha=0.5,
+              fill = "dodgerblue") +
   labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 15),
@@ -602,15 +605,6 @@ pred_one %>%
 load("./Stan/fits/pattern1_noninf_fit.rda")
 bayes_sum = add_ci4int_bayes(p1_non)
 
-bayes_f_slope = bayes_sum[12,7]
-bayes_m_slope = bayes_sum[11,7]
-
-bayes_female_up = bayes_sum[12,9] - bayes_sum[12,7]
-bayes_female_low = -(bayes_sum[12,5] - bayes_sum[12,7])
-
-bayes_male_up = bayes_sum[11,9] - bayes_sum[11,7]
-bayes_male_low = -(bayes_sum[11,5] -bayes_sum[11,7])
-  
 # Extract fit
 ext_p1 <- extract(p1_non)
 str(ext_p1)
@@ -635,29 +629,6 @@ pred_bayes %>%
               method = "lm", fullrange = TRUE) +
   geom_smooth(aes(y = y_upper), 
               se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
-
-pred_bayes %>% 
-  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = y_median,
-              ymin = after_stat(y) - bayes_male_low,
-              ymax = after_stat(y) + bayes_male_up),
-              method = "lm", fullrange = TRUE, alpha = 0.3,
-              data = subset(pred_bayes, SEX == "Male")) +
-  geom_abline(slope = bayes_f_slope, intercept = 100) +
-  geom_abline(slope = bayes_f_slope, intercept = 100+bayes_female_up) +
-  geom_abline(slope = bayes_f_slope, intercept = 100-bayes_female_low) +
-  geom_smooth(aes(y = pred,
-              ymin = after_stat(y) - bayes_female_low,
-              ymax = after_stat(y) + bayes_female_up),
-              method = "lm", fullrange = TRUE, alpha = 0.3,
-              data = subset(pred_bayes, SEX == "Female")) +
   labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 15),

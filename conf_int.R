@@ -1,0 +1,329 @@
+# Functions ####
+tidy_ci = function(fit) {
+  tidy(fit) %>% bind_cols(., as_tibble(confint(fit)))
+}
+
+add_ci4interaction <- function(fit, term1, term2) {
+  # CONFIDENCE INTERVAL for pattern in females
+  # Compute association and its uncertainty 
+  
+  # here we create tables of coefficients and covariance
+  coef.mat <- summary(fit)$coefficients
+  var.mat  <- vcov(fit)
+  
+  # the total term for the association is the 
+  # sum of P2 in the reference sex plus the term for P2:female
+  beta.Pf <- coef.mat[term1,1] + coef.mat[term2,1]
+  
+  # Compute variance in order to compute standard error
+  # We must compute the variance for the total term 
+  # Var(Beta1 + Beta2) = Var(Beta1) + Var(Beta2) + 2*CoVar(Beta1, Beta2) 
+  var.Pf <- var.mat[term1, term1] + 
+    var.mat[term2, term2] +
+    2*var.mat[term1, term2]
+  
+  # this is st error NOT std
+  ste.Pf  <-  sqrt(abs(var.Pf))
+  
+  # compute confidence intervals 
+  lci.Pf <- beta.Pf - 1.96*ste.Pf
+  uci.Pf <- beta.Pf + 1.96*ste.Pf
+  
+  # 2 calculate the test statistic: t = Est/SE
+  # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
+  test_stat = abs(beta.Pf/ste.Pf)
+  pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
+  pvalue
+  
+  tidy_ci(fit) %>% 
+    bind_rows(., tibble(term = paste0(term1, " in females"), estimate = beta.Pf, std.error = ste.Pf,
+                        statistic = test_stat, p.value = pvalue, `2.5 %` = lci.Pf, `97.5 %` = uci.Pf)) %>% 
+    mutate(term = ifelse(term == term1, paste(term1, "in males"), term))
+}
+
+add_ci4int_bayes = function(fit) {
+  int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
+  
+  params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
+  model_sum = summary(fit, params)$summary
+  
+  ext <- extract(fit)
+  
+  post_coef = cbind(ext$alpha, ext$beta_c, 
+                    ext$beta_int, ext$beta_sex, ext$beta_p) %>% as_tibble()
+  
+  colnames(post_coef) = params
+  int_coefs = post_coef %>% dplyr::select(beta_p, beta_int)
+  
+  coef1 = int_coefs$beta_p
+  coef2 = int_coefs$beta_int
+  
+  covmat = cov(int_coefs)
+  beta_f = coef1 + coef2
+  
+  var_f = covmat[1, 1] + 
+    covmat[2, 2] +
+    2*covmat[1, 2]
+  
+  # this is std dev not std error
+  sd_f  <- sqrt(abs(var_f))
+  
+  # take min sample size as conservative est.
+  sampsize = min(int_sum[1,9], int_sum[3,9])
+  
+  # this is std error
+  se_f  <- sd_f/sqrt(sampsize)
+  
+  lci.f <- mean(beta_f) - 1.96*se_f
+  uci.f <- mean(beta_f) + 1.96*se_f
+  
+  # 2 calculate the test statistic: t = Est/SE
+  # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
+  # test_stat = abs(mean(beta_f)/se_f)
+  # pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
+  # NO BAYESIAN PVALUE
+  
+  q = quantile(beta_f, probs = c(0.025, .25, .50, .75, .975)) %>% as.data.frame() %>% 
+    rownames_to_column() %>% 
+    pivot_wider(names_from = "rowname",
+                values_from = ".")
+  
+  new_var = tibble(beta = "p in females", mean = round(mean(beta_f), 4), 
+                   se_mean = round(se_f,4), sd = round(sd_f,4)) %>% 
+    bind_cols(., q)
+  
+  # M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
+  as.data.frame(model_sum)[,-c(9:10)] %>% 
+    rownames_to_column(var="beta") %>% 
+    mutate(beta = c("alpha", "age", "edu", "marital", "home", "iq", "alcohol", "mat_hard",
+                    "sex*p", "sex", "p in males")) %>% 
+    bind_rows(.,new_var) %>% 
+    mutate_at(vars(2:9), round, 2)
+}
+
+# Data ####
+ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
+whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
+
+mn = whole %>% filter(P1 < mean(whole$P1) + 5*sd(whole$P1)) %>% 
+  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
+
+# Viz ####
+load(file = "reg_pat1_fit.rda")
+reg_sum = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
+
+summary(fit_p1a)
+
+# Subset so that n matches regression results
+mn_subset = mn %>% dplyr::select(SID, WISC, P = P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,mat_hard,
+                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
+  mutate(model = "Main Model")
+
+prop.table(table(mn_subset$M_EDU))
+
+lm_fit = function(p,sex){
+  sex = ifelse(sex == "Male", 0, 1)
+  102.1678 + (-0.7885*p) + (sex*0.8503) - 
+    (5.4022*0.2517483 ) - # alcohol
+    (1.3726*0.3531469) - # edu 
+    (0.1713*0.3251748) - # married
+    (2.6254*0.4020979 ) - # material hardship
+    (sex*p*2.6591)
+}
+
+test1=tibble(x=1:10, s= "Female")
+test2=tibble(x=1:10, s= "Male")
+test=bind_rows(test1, test2)
+
+test$y = lm_fit(test$x, test$s)
+ggplot(test, aes(x, y, color = as_factor(s))) + geom_line()
+
+f_slope = reg_sum[12,2][[1]]
+m_slope = reg_sum[2,2][[1]]
+
+female_se = reg_sum[12,3][[1]]
+male_se = reg_sum[2,3][[1]]
+
+pred_1 = predict(fit_p1a, se.fit = TRUE)
+pred = bind_cols(mn_subset, pred_1)
+pred
+
+# Combine predicted outcomes with data
+main = 
+  pred %>% 
+  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, M_AGE, df, residual.scale))
+main
+
+summary(lm(fit~P + P*SEX, data = main))
+lm_fitted = lm_fit(main$P, main$SEX)
+
+main = main %>% bind_cols(lmf = lm_fitted) 
+
+main %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = fit),
+              method = "lm", fullrange = TRUE, se=F) +
+  geom_smooth(aes(y = fit + 1.96*se.fit),
+              se=F, linetype = "dotted", size = 0.5,
+              method = "lm", fullrange = TRUE) +
+  geom_smooth(aes(y = fit - 1.96*se.fit),
+              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
+  geom_abline(slope = f_slope, intercept = 100,color="pink") +
+  geom_abline(slope = m_slope, intercept = 100,color="green") +
+
+  geom_abline(slope = f_slope+1.96*female_se, intercept = 100, color="pink") +
+  geom_abline(slope = m_slope+1.96*male_se, intercept = 100,color="green") +
+
+  geom_abline(slope = f_slope-1.96*female_se, intercept = 100,color="pink") +
+  geom_abline(slope = m_slope-1.96*male_se, intercept = 100,color="green") +
+  geom_line(aes(y = lmf, group = SEX), color="orange") +
+  geom_line(aes(y = lmf + 1.96*female_se, group = SEX), color="orange",
+            data = subset(main, SEX == "Female")) +
+  geom_line(aes(y = lmf - 1.96*female_se, group = SEX), color="orange",
+            data = subset(main, SEX == "Female")) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration")
+
+# CI = beta confidence interval
+# slope +/- 2*standard error of slope
+ci_beta = main %>% 
+  filter(SEX == "Female") %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  # geom_smooth(aes(y = fit,
+  #                 ymin = after_stat(y) - male_se*1.96,
+  #                 ymax = after_stat(y) + male_se*1.96),
+  #             method = "lm", fullrange = TRUE, alpha = 0.3,
+  #             data = subset(main, SEX == "Male")) +
+  # geom_smooth(aes(y = fit+1.96*se.fit), color="green",
+  #             method = "lm", fullrange = TRUE, se = F,
+  #             data = subset(main, SEX == "Male")) +
+  geom_smooth(aes(y = fit,
+                  ymin = after_stat(y) - female_se*1.96,
+                  ymax = after_stat(y) + female_se*1.96),
+              method = "lm", fullrange = TRUE, alpha = 0.3,
+              data = subset(main, SEX == "Female")) +
+  geom_line(aes(y = lmf, group = SEX), color="black") +
+  geom_line(aes(y = lmf + 1.96*female_se, group = SEX), color="black",
+            data = subset(main, SEX == "Female")) +
+  geom_line(aes(y = lmf - 1.96*female_se, group = SEX), color="black",
+            data = subset(main, SEX == "Female")) +
+  # geom_line(aes(y = lmf + 1.96*male_se, group = SEX), color="orange",
+  #           data = subset(main, SEX == "Male")) +
+  # geom_line(aes(y = lmf - 1.96*male_se, group = SEX), color="orange",
+  #           data = subset(main, SEX == "Male")) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+
+# CI = prediction confidence interval
+# pred value +/- 2*se of prediction
+plot_f <- main %>% 
+  filter(SEX == "Female") %>% 
+  ggplot(aes(x = P)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = fit, fill = SEX, color = SEX),
+              method = "lm", fullrange = TRUE, se=F) +
+  geom_smooth(aes(y = fit + 1.96*se.fit, fill = SEX, color = SEX), 
+              se=F, linetype = "dotted", size = 0.5,
+              method = "lm", fullrange = TRUE) +
+  geom_smooth(aes(y = fit - 1.96*se.fit, fill = SEX, color = SEX), 
+              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+
+# build plot object for rendering 
+ggf <- ggplot_build(plot_f)
+
+# extract data for the loess lines from the 'data' slot
+high <- tibble(P = ggf$data[[3]]$x,
+                  ymax = ggf$data[[3]]$y)
+
+low <- tibble(P = ggf$data[[4]]$x,
+                  ymin = ggf$data[[4]]$y)
+
+f_ribbon = low %>% full_join(., high)
+
+# use the loess data to add the 'ribbon' to plot 
+ci_pred = plot_f +
+  geom_ribbon(data = f_ribbon, aes(x = P, ymin = ymin, ymax = ymax),
+              fill = "pink", alpha = 0.4)
+# THIS IS PREDICTION CONFIDENCE INTERVAL
+
+ci_beta + ci_pred
+
+# BAYESIAN ####
+load("./Stan/fits/pattern1_noninf_fit.rda")
+bayes_sum = add_ci4int_bayes(p1_non)
+
+# Extract fit
+ext_p1 <- extract(p1_non)
+str(ext_p1)
+
+y_pred_p1 = ext_p1$y_tilde
+
+y_median = apply(y_pred_p1, 2, median)
+y_upper = apply(y_pred_p1, 2, quantile, .975)
+y_lower = apply(y_pred_p1, 2, quantile, .025)
+
+y_all = tibble(y_median, y_lower, y_upper)
+
+pred_bayes = bind_cols(main, y_all)
+
+pred_bayes %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = y_median),
+              method = "lm", fullrange = TRUE, se=F) +
+  geom_smooth(aes(y = y_lower), 
+              se=F, linetype = "dotted", size = 0.5,
+              method = "lm", fullrange = TRUE) +
+  geom_smooth(aes(y = y_upper), 
+              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
+  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+
+bayes_f_slope = bayes_sum[12,7]
+bayes_m_slope = bayes_sum[11,7]
+
+bayes_female_up = bayes_sum[12,9] - bayes_sum[12,7]
+bayes_female_low = -(bayes_sum[12,5] - bayes_sum[12,7])
+
+bayes_male_up = bayes_sum[11,9] - bayes_sum[11,7]
+bayes_male_low = -(bayes_sum[11,5] -bayes_sum[11,7])
+
+pred_bayes %>% 
+  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
+  ggplot(aes(x = P, fill = SEX, color = SEX)) +
+  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_smooth(aes(y = y_median,
+                  ymin = after_stat(y) - bayes_male_low,
+                  ymax = after_stat(y) + bayes_male_up),
+              method = "lm", fullrange = TRUE, alpha = 0.3,
+              data = subset(pred_bayes, SEX == "Male")) +
+  geom_abline(slope = bayes_f_slope, intercept = 100) +
+  geom_abline(slope = bayes_f_slope, intercept = 100+bayes_female_up) +
+  geom_abline(slope = bayes_f_slope, intercept = 100-bayes_female_low) +
+  
+  geom_abline(slope = bayes_m_slope, intercept = 100) +
+  geom_abline(slope = bayes_m_slope, intercept = 100+bayes_male_up) +
+  geom_abline(slope = bayes_m_slope, intercept = 100-bayes_male_low) +
+  geom_smooth(aes(y = pred,
+                  ymin = after_stat(y) - bayes_female_low,
+                  ymax = after_stat(y) + bayes_female_up),
+              method = "lm", fullrange = TRUE, alpha = 0.3,
+              data = subset(pred_bayes, SEX == "Female")) +
+  labs(y = "WISC Full Scale IQ", x = "PHT pattern concentration") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+
