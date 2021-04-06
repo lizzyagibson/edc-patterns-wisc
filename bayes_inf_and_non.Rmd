@@ -208,7 +208,7 @@ sdP2 = sd_ewa$varP2
 
 # Conditioning on covariates: M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard
 # cont variables = 0, cat variables = proportion in data
-x_const_1 = c(0, 0.3531469, 0.3251748, 0, 0, 0.2517483, 0.4020979)
+x_const_1 = c(0, 0.5, 0.5, 0, 0, 0.5, 0.5)
 x_const   = kronecker(matrix(1,286,1), t(x_const_1))
 ```
 

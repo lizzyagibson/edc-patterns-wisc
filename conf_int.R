@@ -44,7 +44,7 @@ add_ci4interaction <- function(fit, term1, term2) {
 add_ci4int_bayes = function(fit) {
   int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
   
-  params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
+  params = names(p1_non_const)[grep("(alpha|beta)", names(p1_non_const))]
   model_sum = summary(fit, params)$summary
   
   ext <- extract(fit)
@@ -176,37 +176,58 @@ summary(main$P)
 main %>% 
   ggplot(aes(x = P, fill = SEX, color = SEX)) +
   geom_point(aes(y = WISC), alpha = 0.25, size = 0.25) + 
-  geom_abline(slope = f_slope, intercept = fint,color="darkgray") +
-  geom_abline(slope = m_slope, intercept = mint,color="darkgray") +
+  geom_abline(intercept = mean(main$WISC), slope = 0, 
+              color = "darkgray", linetype = "dashed") + 
+  # geom_abline(slope = f_slope, intercept = fint,color="darkgray") +
+  # geom_abline(slope = m_slope, intercept = mint,color="darkgray") +
   geom_line(aes(y = predIQ)) +
   #geom_line(aes(y = lci), linetype = "dotted") +
   #geom_line(aes(y = uci), linetype = "dotted") +
-  geom_ribbon(aes(ymin = lci, ymax = uci), fullrange=TRUE,
+  geom_ribbon(aes(ymin = lci, ymax = uci),
               alpha = 0.25, linetype = "dotted", size = 0.25) +
-  facet_grid(.~SEX, scales = "free_x")
+  #facet_grid(.~SEX, scales = "free_x") +
+  ylim(45, 135) +
+  theme_minimal() + scale_color_lancet() + scale_fill_lancet()
 
 # BAYESIAN ####
 load("./Stan/fits/pattern1_noninf_fit.rda")
 bayes_sum = add_ci4int_bayes(p1_non_const)
 bayes_sum
 
+# shinystan::launch_shinystan(p1_non_const)
+
 # Extract fit
 ext_p1 <- extract(p1_non_const)
 str(ext_p1)
 
-y_const = ext_p1$y_const
+y_f = ext_p1$y_f
+y_m = ext_p1$y_m
 
-y_median = apply(y_const, 2, median)
-y_upper = apply(y_const, 2, quantile, .975)
-y_lower = apply(y_const, 2, quantile, .025)
+f_median = apply(y_f, 2, median)
+f_upper  = apply(y_f, 2, quantile, .975)
+f_lower  = apply(y_f, 2, quantile, .025)
+
+m_median = apply(y_m, 2, median)
+m_upper  = apply(y_m, 2, quantile, .975)
+m_lower  = apply(y_m, 2, quantile, .025)
+
+hist(y_f)
+hist(y_m)
 
 y_all = tibble(y_median, y_lower, y_upper)
 
-pred_bayes = bind_cols(mn_subset, y_all)
+yall = tibble(f_median,f_upper ,f_lower ,m_median,m_upper ,m_lower)
+
+pred_bayes = bind_cols(mn_subset, yall) %>% 
+  mutate(y_median = ifelse(SEX == "Male", m_median, f_median),
+         y_lower  = ifelse(SEX == "Male", m_lower, f_lower),
+         y_upper  = ifelse(SEX == "Male", m_upper, f_upper))
 
 pred_bayes %>% 
   ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = y_median), alpha=0.25, size = 0.5) +
+  geom_point(aes(y = y_median), alpha=0.25, size = 0.5) + 
+  geom_point(aes(y  = y_lower), alpha=0.25, size = 0.5) +
+  geom_point(aes(y = y_upper), alpha=0.25, size = 0.5) +
   geom_smooth(aes(y = y_median),
               method = "lm", fullrange = TRUE, se=F) +
   geom_smooth(aes(y = y_lower), 
@@ -215,10 +236,12 @@ pred_bayes %>%
   geom_smooth(aes(y = y_upper), 
               se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
   labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+  # theme(legend.title = element_blank(),
+  #       legend.text = element_text(size = 15),
+  #       legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
+  #       legend.background = element_rect(fill = "#ffffffaa", colour = NA)) +
+  facet_grid(.~SEX, scales = "free_x") +
+  ylim(45, 135)
 
 bayes_f_slope = bayes_sum[12,7]
 bayes_m_slope = bayes_sum[11,7]
@@ -230,7 +253,6 @@ bayes_male_up = bayes_sum[11,9] - bayes_sum[11,7]
 bayes_male_low = -(bayes_sum[11,5] -bayes_sum[11,7])
 
 pred_bayes %>% 
-  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
   ggplot(aes(x = P, fill = SEX, color = SEX)) +
   geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
   geom_smooth(aes(y = y_median,
@@ -245,7 +267,7 @@ pred_bayes %>%
   geom_abline(slope = bayes_m_slope, intercept = 100) +
   geom_abline(slope = bayes_m_slope, intercept = 100+bayes_male_up) +
   geom_abline(slope = bayes_m_slope, intercept = 100-bayes_male_low) +
-  geom_smooth(aes(y = pred,
+  geom_smooth(aes(y = y_median,
                   ymin = after_stat(y) - bayes_female_low,
                   ymax = after_stat(y) + bayes_female_up),
               method = "lm", fullrange = TRUE, alpha = 0.3,

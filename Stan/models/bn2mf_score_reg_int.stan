@@ -54,8 +54,10 @@ generated quantities {
   real y_tilde[N] = normal_rng(((WA * beta_p) + (inter * beta_int) + 
                                 (sex * beta_sex) + (x * beta_c) + alpha), sigma);
                                 
-  real y_const[N] = normal_rng(((WA * beta_p) + (inter * beta_int) + 
-                                (sex * beta_sex) + (x_const * beta_c) + alpha), sigma);
+  real y_f[N] = normal_rng(((WA * beta_p) + (WA*beta_int) + 
+                                (beta_sex) + (x_const * beta_c) + alpha), sigma);
+  real y_m[N] = normal_rng(((WA * beta_p) + 
+                                (x_const * beta_c) + alpha), sigma);
 }
 
 
