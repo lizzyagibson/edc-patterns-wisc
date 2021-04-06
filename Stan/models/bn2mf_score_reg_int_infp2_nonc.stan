@@ -38,7 +38,7 @@ transformed parameters {
 model {
   //sigma ~ inv_gamma(0.001, 0.001); // prior on error
   // Cite: stat.columbia.edu/~gelman/research/published/taumain.pdf
-  sigma ~ exponential(1);
+  sigma ~ exponential(1/13.4);
   // rstanarm default
   
   alpha ~ normal(100, 45); // prior on alpha = IQ

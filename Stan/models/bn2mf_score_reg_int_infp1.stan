@@ -38,7 +38,7 @@ transformed parameters {
 model {
   //sigma ~ inv_gamma(0.001, 0.001); // prior on error
   // Cite: stat.columbia.edu/~gelman/research/published/taumain.pdf
-  sigma ~ exponential(1);
+  sigma ~ exponential(1/13.4);
   // rstanarm default
   
   alpha ~ normal(100, 45); // prior on alpha = IQ
@@ -47,7 +47,7 @@ model {
   // defaults rstanarm = 2.5*std(y)
   beta_c   ~ normal(0, 2.5*13.4);
   beta_sex ~ normal(0, 2.5*13.4);
-  beta_int ~ normal(0, 2.5*13.4);
+  //beta_int ~ normal(0, 2.5*13.4);
   
   // PRIOR KNOWLEDGE
   // ave effect of pht in Pam's paper
