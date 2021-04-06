@@ -178,7 +178,7 @@ bind_cols(ppp_current, ewa) %>%
 
 ```{r, fig.height=7, fig.width=7}
 # Get lower triangle of the correlation matrix
-get_lower_tri<-function(x){
+get_lower_tri <-function(x){
   x[upper.tri(x)] <- NA
   
   for (i in 1:nrow(x)) {
@@ -189,6 +189,9 @@ get_lower_tri<-function(x){
   
   return(x)
 }
+
+round(cor(mn_ppp[,-1], use = "complete.obs", 
+                                  method = c("spearman")),2)
 
 cormat <- get_lower_tri(round(cor(mn_ppp[,-1], use = "complete.obs", 
                                   method = c("spearman")),2))[2:17, 1:16]
@@ -206,15 +209,11 @@ melted_cormat <- melt(cormat) %>%
     Var1 = fct_inorder(str_remove(Var1, "_")),
     Var2 = fct_inorder(str_remove(Var2, "_"))) %>% as_tibble()
 
-newcol <- colorRampPalette(brewer.pal(9, 'Blues'))
-ncols <- 100
-bluecols2 <- newcol(ncols) #apply the function to get 100 colours
-pie(rep(1, ncols), col = bluecols2, border = NA, labels = NA)
-
 #pdf("./Figures/ppp_corr.pdf")
 melted_cormat %>% 
-  ggplot(aes(x = Var1, y = Var2)) + 
-  geom_tile(aes(fill = Correlation), color = "white") + 
+  mutate(Var1 = fct_rev(Var1)) %>% 
+  ggplot(aes(x = Var2, y = Var1)) + 
+  geom_tile(aes(fill = Correlation), color = "black", size=0.25) + 
   scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00",
                        na.value = "grey90") +
   #scale_fill_distiller(palette="RdYlBu",
@@ -222,9 +221,49 @@ melted_cormat %>%
   labs(x = "", y = "", title = "") + 
   theme_test(base_size = 20) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.major = element_blank(),
         legend.text = element_text(size = 8),
         legend.title = element_text(size = 15),
         legend.position = "bottom")
+#dev.off()
+```
+
+## Loadings
+
+```{r}
+eh <- readMat(here::here("./Data/mn2_EH.mat"))[[1]]
+# ["MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA"];
+
+colnames(eh) <- c("MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA")
+
+applied <- eh %>% 
+  as_tibble() %>% 
+  mutate(Pattern = 1:2) %>% 
+  gather(key = Chemicals, value = Loadings, -Pattern) %>%
+  mutate(Class = as_factor(case_when(grepl("PB", Chemicals) ~ "Parabens",
+                           grepl("^M[A-Z]", Chemicals) ~ "Phthalates",
+                           TRUE ~ "Phenols")),
+         Chemicals = str_replace(Chemicals, "_", "-")) %>% 
+  mutate(Pattern = paste0("Pattern ", Pattern),
+         Chemicals = fct_inorder(Chemicals))
+
+#44pdf("./Figures/eh_loadings.pdf", width = 2.5)
+applied %>% 
+  mutate(Chemicals = fct_rev(Chemicals)) %>% 
+  ggplot(aes(x = Pattern, y = Chemicals)) + 
+  geom_tile(aes(fill = Loadings), color = "black", size=.25) + 
+  scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00") +
+  labs(x = "", y = "", title = "") + 
+  theme_test(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        legend.direction = "horizontal",
+        legend.position = c(0, -0.275), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA),
+        #legend.key.size = unit(0.85, "lines"),
+        plot.margin = margin(0,1,1,0, "cm"))
 #dev.off()
 ```
 
