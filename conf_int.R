@@ -119,8 +119,7 @@ mn_subset = mn %>% dplyr::select(SID, WISC, P = P1, SEX, M_IQ, ALCOHOL, M_EDU, M
 # OLS ####
 load(file = "reg_pat1_fit.rda")
 reg_sum = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
-
-summary(fit_p1a)
+reg_sum
 
 fit_flip <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
                  MARITAL_STATUS + HOME_SCORE + mat_hard
@@ -156,26 +155,23 @@ head(pred_flip)[,c(1,2,10,11,12,20)] # se.fit.P1 = 0.5440310
 main = 
   mn_subset %>%
   bind_cols(., pred) %>% 
-  bind_cols(., flip.se = pred_flip$se.fit.P1) %>% # just get se for female
+  bind_cols(., flip.se = (pred_flip$se.fit.P1 + pred_flip$se.fit.P1.SEX)) %>% # just get se for female
   dplyr::select(SID, WISC, grep("(SEX|P)", names(.)), flip.se) %>% 
    # -c(M_IQ:model, df, residual.scale, fit.M_IQ:fit.mat_hard, se.fit.M_IQ:se.fit.mat_hard)) %>% 
   mutate(# predIQm = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX,
          # predIQf = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, 
          # fit.sex changes intercept, interaction changes slope
          predIQ = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, # ifelse(SEX == "Female", predIQf, predIQm),
-         se.male = se.fit.P1,
+         se.male = se.fit.P1 + se.fit.P1.SEX,
          se.female = flip.se,
          se = ifelse(SEX == "Female", se.female, se.male),
          lci = predIQ - 1.96*se,
          uci = predIQ + 1.96*se)
 main
 
-mean(main$WISC)
-summary(main$P)
-
-main %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha = 0.25, size = 0.25) + 
+ols_plot = main %>% 
+  ggplot(aes(x = P)) +
+  geom_point(aes(y = WISC), color = "lightgray", size = 0.5) + 
   geom_abline(intercept = mean(main$WISC), slope = 0, 
               color = "darkgray", linetype = "dashed") + 
   # geom_abline(slope = f_slope, intercept = fint,color="darkgray") +
@@ -185,20 +181,24 @@ main %>%
   #geom_line(aes(y = uci), linetype = "dotted") +
   geom_ribbon(aes(ymin = lci, ymax = uci),
               alpha = 0.25, linetype = "dotted", size = 0.25) +
-  #facet_grid(.~SEX, scales = "free_x") +
+  facet_grid(.~SEX, scales = "free_x") +
   ylim(45, 135) +
-  theme_minimal() + scale_color_lancet() + scale_fill_lancet()
+  theme_minimal(base_size = 15) + 
+  theme(legend.title = element_blank(),
+        legend.position = "none") +
+  scale_color_lancet() + scale_fill_lancet() +
+  labs(y = "WISC full scale IQ", x = "PHT pattern concentration") 
 
 # BAYESIAN ####
 load("./Stan/fits/pattern1_noninf_fit.rda")
 bayes_sum = add_ci4int_bayes(p1_non_const)
 bayes_sum
 
+summary(p1_non_const)$summary[1:5,]
 # shinystan::launch_shinystan(p1_non_const)
 
 # Extract fit
 ext_p1 <- extract(p1_non_const)
-str(ext_p1)
 
 y_f = ext_p1$y_f
 y_m = ext_p1$y_m
@@ -211,8 +211,9 @@ m_median = apply(y_m, 2, median)
 m_upper  = apply(y_m, 2, quantile, .975)
 m_lower  = apply(y_m, 2, quantile, .025)
 
-hist(y_f)
-hist(y_m)
+# hist(y_f[,2])
+# hist(y_m)
+# mean(f_upper-f_lower)
 
 y_all = tibble(y_median, y_lower, y_upper)
 
@@ -223,58 +224,16 @@ pred_bayes = bind_cols(mn_subset, yall) %>%
          y_lower  = ifelse(SEX == "Male", m_lower, f_lower),
          y_upper  = ifelse(SEX == "Male", m_upper, f_upper))
 
-pred_bayes %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = y_median), alpha=0.25, size = 0.5) + 
-  geom_point(aes(y  = y_lower), alpha=0.25, size = 0.5) +
-  geom_point(aes(y = y_upper), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = y_median),
+ols_plot +
+  #geom_point(data = pred_bayes, aes(y = y_median, color = SEX), alpha=0.25, size = 0.5) +
+  #geom_point(data = pred_bayes, aes(y  = y_lower, color = SEX), alpha=0.25, size = 0.5) +
+  #geom_point(data = pred_bayes, aes(y = y_upper, color = SEX), alpha=0.25, size = 0.5) +
+  geom_smooth(data = pred_bayes, aes(y = y_median, color = SEX), size = 0.5,
               method = "lm", fullrange = TRUE, se=F) +
-  geom_smooth(aes(y = y_lower), 
+  geom_smooth(data = pred_bayes, aes(y = y_lower, color = SEX),
               se=F, linetype = "dotted", size = 0.5,
-              method = "lm", fullrange = TRUE) +
-  geom_smooth(aes(y = y_upper), 
-              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  # theme(legend.title = element_blank(),
-  #       legend.text = element_text(size = 15),
-  #       legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-  #       legend.background = element_rect(fill = "#ffffffaa", colour = NA)) +
-  facet_grid(.~SEX, scales = "free_x") +
-  ylim(45, 135)
-
-bayes_f_slope = bayes_sum[12,7]
-bayes_m_slope = bayes_sum[11,7]
-
-bayes_female_up = bayes_sum[12,9] - bayes_sum[12,7]
-bayes_female_low = -(bayes_sum[12,5] - bayes_sum[12,7])
-
-bayes_male_up = bayes_sum[11,9] - bayes_sum[11,7]
-bayes_male_low = -(bayes_sum[11,5] -bayes_sum[11,7])
-
-pred_bayes %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = y_median,
-                  ymin = after_stat(y) - bayes_male_low,
-                  ymax = after_stat(y) + bayes_male_up),
-              method = "lm", fullrange = TRUE, alpha = 0.3,
-              data = subset(pred_bayes, SEX == "Male")) +
-  geom_abline(slope = bayes_f_slope, intercept = 100) +
-  geom_abline(slope = bayes_f_slope, intercept = 100+bayes_female_up) +
-  geom_abline(slope = bayes_f_slope, intercept = 100-bayes_female_low) +
-  
-  geom_abline(slope = bayes_m_slope, intercept = 100) +
-  geom_abline(slope = bayes_m_slope, intercept = 100+bayes_male_up) +
-  geom_abline(slope = bayes_m_slope, intercept = 100-bayes_male_low) +
-  geom_smooth(aes(y = y_median,
-                  ymin = after_stat(y) - bayes_female_low,
-                  ymax = after_stat(y) + bayes_female_up),
-              method = "lm", fullrange = TRUE, alpha = 0.3,
-              data = subset(pred_bayes, SEX == "Female")) +
-  labs(y = "WISC Full Scale IQ", x = "PHT pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
+              fullrange = TRUE) +
+  geom_smooth(data = pred_bayes, aes(y = y_upper, color = SEX),
+              se=F, linetype = "dotted", size = 0.5) +
+  labs(y = "WISC full scale IQ", x = "PHT pattern concentration")
 
