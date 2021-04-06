@@ -108,176 +108,105 @@ whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCO
 mn = whole %>% filter(P1 < mean(whole$P1) + 5*sd(whole$P1)) %>% 
   mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
 
-# Viz ####
-load(file = "reg_pat1_fit.rda")
-reg_sum = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
-
-summary(fit_p1a)
+# so female is reference
+mn_flip = mn %>% mutate(SEX = fct_rev(SEX))
 
 # Subset so that n matches regression results
 mn_subset = mn %>% dplyr::select(SID, WISC, P = P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,mat_hard,
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
   mutate(model = "Main Model")
 
-prop.table(table(mn_subset$M_EDU))
+# OLS ####
+load(file = "reg_pat1_fit.rda")
+reg_sum = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
 
-lm_fit = function(p,sex){
-  sex = ifelse(sex == "Male", 0, 1)
-  102.1678 + (-0.7885*p) + (sex*0.8503) - 
-    (5.4022*0.2517483 ) - # alcohol
-    (1.3726*0.3531469) - # edu 
-    (0.1713*0.3251748) - # married
-    (2.6254*0.4020979 ) - # material hardship
-    (sex*p*2.6591)
-}
+summary(fit_p1a)
 
-test1=tibble(x=1:10, s= "Female")
-test2=tibble(x=1:10, s= "Male")
-test=bind_rows(test1, test2)
+fit_flip <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
+                 MARITAL_STATUS + HOME_SCORE + mat_hard
+               , data = mn_flip)
+summary(fit_flip)
 
-test$y = lm_fit(test$x, test$s)
-ggplot(test, aes(x, y, color = as_factor(s))) + geom_line()
-
+# Get slope and se from regression model
 f_slope = reg_sum[12,2][[1]]
 m_slope = reg_sum[2,2][[1]]
 
-female_se = reg_sum[12,3][[1]]
-male_se = reg_sum[2,3][[1]]
+fint = 102.1678 + (0.8503) - 
+  (5.4022*0.2517483 ) - # alcohol
+  (1.3726*0.3531469) - # edu 
+  (0.1713*0.3251748) - # married
+  (2.6254*0.4020979 ) # material hardship
 
-pred_1 = predict(fit_p1a, se.fit = TRUE)
-pred = bind_cols(mn_subset, pred_1)
-pred
+mint = 102.1678 - 
+  (5.4022*0.2517483 ) - # alcohol
+  (1.3726*0.3531469) - # edu 
+  (0.1713*0.3251748) - # married
+  (2.6254*0.4020979 ) # material hardship
+
+# Get predicted values
+# this is conditional on everything else!
+pred = as.data.frame(predict(fit_p1a, se.fit = TRUE, type = c("terms")))
+head(pred)[,c(1,2,10,11,12,20)]
+
+# Get predicted values for females
+pred_flip = as.data.frame(predict(fit_flip, se.fit = TRUE, type = c("terms")))
+head(pred_flip)[,c(1,2,10,11,12,20)] # se.fit.P1 = 0.5440310
 
 # Combine predicted outcomes with data
 main = 
-  pred %>% 
-  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, M_AGE, df, residual.scale))
+  mn_subset %>%
+  bind_cols(., pred) %>% 
+  bind_cols(., flip.se = pred_flip$se.fit.P1) %>% # just get se for female
+  dplyr::select(SID, WISC, grep("(SEX|P)", names(.)), flip.se) %>% 
+   # -c(M_IQ:model, df, residual.scale, fit.M_IQ:fit.mat_hard, se.fit.M_IQ:se.fit.mat_hard)) %>% 
+  mutate(# predIQm = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX,
+         # predIQf = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, 
+         # fit.sex changes intercept, interaction changes slope
+         predIQ = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, # ifelse(SEX == "Female", predIQf, predIQm),
+         se.male = se.fit.P1,
+         se.female = flip.se,
+         se = ifelse(SEX == "Female", se.female, se.male),
+         lci = predIQ - 1.96*se,
+         uci = predIQ + 1.96*se)
 main
 
-summary(lm(fit~P + P*SEX, data = main))
-lm_fitted = lm_fit(main$P, main$SEX)
-
-main = main %>% bind_cols(lmf = lm_fitted) 
+mean(main$WISC)
+summary(main$P)
 
 main %>% 
   ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = fit),
-              method = "lm", fullrange = TRUE, se=F) +
-  geom_smooth(aes(y = fit + 1.96*se.fit),
-              se=F, linetype = "dotted", size = 0.5,
-              method = "lm", fullrange = TRUE) +
-  geom_smooth(aes(y = fit - 1.96*se.fit),
-              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
-  geom_abline(slope = f_slope, intercept = 100,color="pink") +
-  geom_abline(slope = m_slope, intercept = 100,color="green") +
-
-  geom_abline(slope = f_slope+1.96*female_se, intercept = 100, color="pink") +
-  geom_abline(slope = m_slope+1.96*male_se, intercept = 100,color="green") +
-
-  geom_abline(slope = f_slope-1.96*female_se, intercept = 100,color="pink") +
-  geom_abline(slope = m_slope-1.96*male_se, intercept = 100,color="green") +
-  geom_line(aes(y = lmf, group = SEX), color="orange") +
-  geom_line(aes(y = lmf + 1.96*female_se, group = SEX), color="orange",
-            data = subset(main, SEX == "Female")) +
-  geom_line(aes(y = lmf - 1.96*female_se, group = SEX), color="orange",
-            data = subset(main, SEX == "Female")) +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration")
-
-# CI = beta confidence interval
-# slope +/- 2*standard error of slope
-ci_beta = main %>% 
-  filter(SEX == "Female") %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  # geom_smooth(aes(y = fit,
-  #                 ymin = after_stat(y) - male_se*1.96,
-  #                 ymax = after_stat(y) + male_se*1.96),
-  #             method = "lm", fullrange = TRUE, alpha = 0.3,
-  #             data = subset(main, SEX == "Male")) +
-  # geom_smooth(aes(y = fit+1.96*se.fit), color="green",
-  #             method = "lm", fullrange = TRUE, se = F,
-  #             data = subset(main, SEX == "Male")) +
-  geom_smooth(aes(y = fit,
-                  ymin = after_stat(y) - female_se*1.96,
-                  ymax = after_stat(y) + female_se*1.96),
-              method = "lm", fullrange = TRUE, alpha = 0.3,
-              data = subset(main, SEX == "Female")) +
-  geom_line(aes(y = lmf, group = SEX), color="black") +
-  geom_line(aes(y = lmf + 1.96*female_se, group = SEX), color="black",
-            data = subset(main, SEX == "Female")) +
-  geom_line(aes(y = lmf - 1.96*female_se, group = SEX), color="black",
-            data = subset(main, SEX == "Female")) +
-  # geom_line(aes(y = lmf + 1.96*male_se, group = SEX), color="orange",
-  #           data = subset(main, SEX == "Male")) +
-  # geom_line(aes(y = lmf - 1.96*male_se, group = SEX), color="orange",
-  #           data = subset(main, SEX == "Male")) +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
-
-# CI = prediction confidence interval
-# pred value +/- 2*se of prediction
-plot_f <- main %>% 
-  filter(SEX == "Female") %>% 
-  ggplot(aes(x = P)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = fit, fill = SEX, color = SEX),
-              method = "lm", fullrange = TRUE, se=F) +
-  geom_smooth(aes(y = fit + 1.96*se.fit, fill = SEX, color = SEX), 
-              se=F, linetype = "dotted", size = 0.5,
-              method = "lm", fullrange = TRUE) +
-  geom_smooth(aes(y = fit - 1.96*se.fit, fill = SEX, color = SEX), 
-              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
-
-# build plot object for rendering 
-ggf <- ggplot_build(plot_f)
-
-# extract data for the loess lines from the 'data' slot
-high <- tibble(P = ggf$data[[3]]$x,
-                  ymax = ggf$data[[3]]$y)
-
-low <- tibble(P = ggf$data[[4]]$x,
-                  ymin = ggf$data[[4]]$y)
-
-f_ribbon = low %>% full_join(., high)
-
-# use the loess data to add the 'ribbon' to plot 
-ci_pred = plot_f +
-  geom_ribbon(data = f_ribbon, aes(x = P, ymin = ymin, ymax = ymax),
-              fill = "pink", alpha = 0.4)
-# THIS IS PREDICTION CONFIDENCE INTERVAL
-
-ci_beta + ci_pred
+  geom_point(aes(y = WISC), alpha = 0.25, size = 0.25) + 
+  geom_abline(slope = f_slope, intercept = fint,color="darkgray") +
+  geom_abline(slope = m_slope, intercept = mint,color="darkgray") +
+  geom_line(aes(y = predIQ)) +
+  #geom_line(aes(y = lci), linetype = "dotted") +
+  #geom_line(aes(y = uci), linetype = "dotted") +
+  geom_ribbon(aes(ymin = lci, ymax = uci), fullrange=TRUE,
+              alpha = 0.25, linetype = "dotted", size = 0.25) +
+  facet_grid(.~SEX, scales = "free_x")
 
 # BAYESIAN ####
 load("./Stan/fits/pattern1_noninf_fit.rda")
-bayes_sum = add_ci4int_bayes(p1_non)
+bayes_sum = add_ci4int_bayes(p1_non_const)
+bayes_sum
 
 # Extract fit
-ext_p1 <- extract(p1_non)
+ext_p1 <- extract(p1_non_const)
 str(ext_p1)
 
-y_pred_p1 = ext_p1$y_tilde
+y_const = ext_p1$y_const
 
-y_median = apply(y_pred_p1, 2, median)
-y_upper = apply(y_pred_p1, 2, quantile, .975)
-y_lower = apply(y_pred_p1, 2, quantile, .025)
+y_median = apply(y_const, 2, median)
+y_upper = apply(y_const, 2, quantile, .975)
+y_lower = apply(y_const, 2, quantile, .025)
 
 y_all = tibble(y_median, y_lower, y_upper)
 
-pred_bayes = bind_cols(main, y_all)
+pred_bayes = bind_cols(mn_subset, y_all)
 
 pred_bayes %>% 
   ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
+  geom_point(aes(y = y_median), alpha=0.25, size = 0.5) +
   geom_smooth(aes(y = y_median),
               method = "lm", fullrange = TRUE, se=F) +
   geom_smooth(aes(y = y_lower), 

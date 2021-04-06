@@ -450,6 +450,12 @@ add_ci4interaction(fit_p2, "P2", "P2:SEXFemale")
 #### Pattern 1
 
 ```{r}
+mn_flip = mn %>% mutate(SEX = fct_rev(SEX))
+
+fit_flip <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + mat_hard
+             , data = mn_flip)
+
 fit_p1a <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
               MARITAL_STATUS + HOME_SCORE + mat_hard
              , data = mn)
@@ -504,137 +510,6 @@ stargazer::stargazer(model_table, summary = F)
 ```
 
 
-### Viz
-
-```{r, fig.height=7}
-pred_1 = predict(fit_p1a, se.fit = TRUE)
-pred_2 = predict(fit_p2a, se.fit = TRUE)
-
-# Subset so that n matches regression results
-mn_subset = mn %>% dplyr::select(SID, WISC, P_1 = P1, P_2 = P2, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,
-                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
-              mutate(model = "Main Model")
-
-pred = bind_cols(mn_subset, pred_1 = pred_1$fit, se_1 = pred_1$se.fit,
-                            pred_2 = pred_2$fit, se_2 = pred_2$se.fit)
-
-# Combine predicted outcomes with data
-main = 
-  pred %>% 
-  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, M_AGE)) %>% 
-  mutate(SEX = fct_relevel(SEX, "Male", after = 1)) %>%
-  pivot_longer(c(P_1:P_2, pred_1:se_2),
-               names_to = c("term", "pattern"),
-               names_sep = "_") %>% 
-  pivot_wider(names_from = term,
-              values_from = value)
-
-main %>% 
-  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = pred),
-              method = "lm", fullrange = TRUE, se=F) +
-  geom_smooth(aes(y = pred + 1.96*se), 
-              se=F, linetype = "dotted", size = 0.5,
-              method = "lm", fullrange = TRUE) +
-  geom_smooth(aes(y = pred - 1.96*se), 
-              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
-  facet_wrap(.~pattern) + 
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration")
-```
-
-### Viz Pattern 1
-
-```{r}
-pred_one = main %>% filter(pattern == "1")
-
-sum_one = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
-
-female_se = sum_one[12, 3][[1]]
-male_se = sum_one[2, 3][[1]]
-
-# CI = beta confidence interval
-# slope +/- 2*standard error of slope
-pred_one %>% 
-  mutate(pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1")) %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = pred,
-              ymin = after_stat(y) - male_se*1.96,
-              ymax = after_stat(y) + male_se*1.96),
-              method = "lm", fullrange = TRUE, alpha = 0.3,
-              data = subset(pred_one, SEX == "Male")) +
-  geom_smooth(aes(y = pred+1.96*se), color="green",
-              method = "lm", fullrange = TRUE, se = F,
-              data = subset(pred_one, SEX == "Male")) +
-  geom_smooth(aes(y = pred,
-              ymin = after_stat(y) - female_se*1.96,
-              ymax = after_stat(y) + female_se*1.96),
-              method = "lm", fullrange = TRUE, alpha = 0.3,
-              data = subset(pred_one, SEX == "Female")) +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
-
-# CI = prediction confidence interval
-# pred value +/- 2*se of prediction
-pred_one %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = pred),
-              method = "lm", fullrange = TRUE, se=F) +
-  geom_smooth(aes(y = pred + 1.96*se), 
-              se=F, linetype = "dotted", size = 0.5,
-              method = "lm", fullrange = TRUE) +
-  geom_smooth(aes(y = pred - 1.96*se), 
-              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
-  geom_ribbon(aes(y = pred, ymin = stat(y) - 1.96*se, ymax = stat(y) + 1.96*se), 
-              stat = "smooth", method = "lm", fullrange = T, alpha=0.5,
-              fill = "dodgerblue") +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
-```
-
-```{r}
-load("./Stan/fits/pattern1_noninf_fit.rda")
-bayes_sum = add_ci4int_bayes(p1_non)
-
-# Extract fit
-ext_p1 <- extract(p1_non)
-str(ext_p1)
-
-y_pred_p1 = ext_p1$y_tilde
-
-y_median = apply(y_pred_p1, 2, median)
-y_upper = apply(y_pred_p1, 2, quantile, .975)
-y_lower = apply(y_pred_p1, 2, quantile, .025)
-
-y_all = tibble(y_median, y_lower, y_upper)
-
-pred_bayes = bind_cols(pred_one, y_all)
-
-pred_bayes %>% 
-  ggplot(aes(x = P, fill = SEX, color = SEX)) +
-  geom_point(aes(y = WISC), alpha=0.25, size = 0.5) +
-  geom_smooth(aes(y = y_median),
-              method = "lm", fullrange = TRUE, se=F) +
-  geom_smooth(aes(y = y_lower), 
-              se=F, linetype = "dotted", size = 0.5,
-              method = "lm", fullrange = TRUE) +
-  geom_smooth(aes(y = y_upper), 
-              se=F, linetype = "dotted", size = 0.5, method = "lm", fullrange = TRUE) +
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.position = c(0.2, 0.125), # c(1,0) right bottom, c(1,1) right top.
-        legend.background = element_rect(fill = "#ffffffaa", colour = NA))
-```
 
   <br>  
   <br>  
