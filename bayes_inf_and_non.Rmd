@@ -205,6 +205,11 @@ P1 = bayes$P1
 sd_ewa = bayes %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
 sdP1 = sd_ewa$varP1
 sdP2 = sd_ewa$varP2
+
+# Conditioning on covariates: M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard
+# cont variables = 0, cat variables = proportion in data
+x_const_1 = c(0, 0.3531469, 0.3251748, 0, 0, 0.2517483, 0.4020979)
+x_const   = kronecker(matrix(1,286,1), t(x_const_1))
 ```
 
 ```{r, standat}
@@ -219,6 +224,7 @@ p2_data = list(N = N,
 p1_data = list(N = N,
                   C = C,
                   x = x,
+                  x_const = x_const,
                   y = y,
                   sex = sex,
                   ewa = P1,
@@ -237,13 +243,14 @@ p1_data = list(N = N,
 #     cores = 2)                    # number of cores
 # save(p2_non, file = "./Stan/fits/pattern2_noninf_fit.rda")
 
-# p1_non <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
-#     data = p1_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
+p1_non_const <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
+    data = p1_data,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
 # save(p1_non, file = "./Stan/fits/pattern1_noninf_fit.rda")
 
 # p2_inf <- stan(
