@@ -226,7 +226,7 @@ p2_data = list(N = N,
 p1_data = list(N = N,
                   C = C,
                   x = x,
-                  x_const = x_const,
+                  #x_const = x_const,
                   y = y,
                   sex = sex,
                   ewa = P1,
@@ -236,60 +236,60 @@ p1_data = list(N = N,
 ## Bayesian models
 
 ```{r}
-# p2_non <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
-#     data = p2_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p2_non, file = "./Stan/fits/pattern2_noninf_fit.rda")
+p2_non <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
+    data = p2_data,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p2_non, file = "./Stan/fits/pattern2_noninf_fit.rda")
 
-p1_non_const <- stan(
+p1_non <- stan(
   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
     data = p1_data,               # named list of data
     chains = 4,                   # number of Markov chains
     warmup = 1000,                # number of warmup iterations per chain
     iter = 5000,                  # total number of iterations per chain
     cores = 2)                    # number of cores
-save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
-# save(p1_non, file = "./Stan/fits/pattern1_noninf_fit.rda")
+# save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
+save(p1_non, file = "./Stan/fits/pattern1_noninf_fit.rda")
 
-# p2_inf <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp2.stan",  # Stan program
-#     data = p2_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p2_inf, file = "./Stan/fits/pattern2_inf_fit.rda")
-# 
-# p1_inf <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp1.stan",  # Stan program
-#     data = p1_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p1_inf, file = "./Stan/fits/pattern1_inf_fit.rda")
-# 
-# p2_infpnonc <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
-#     data = p2_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p2_infpnonc, file = "./Stan/fits/pattern2_infp2nonc_fit.rda")
-# 
-# p1_infpnonc <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
-#     data = p1_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p1_infpnonc, file = "./Stan/fits/pattern1_infp1nonc_fit.rda")
+p2_inf <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int_infp2.stan",  # Stan program
+    data = p2_data,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p2_inf, file = "./Stan/fits/pattern2_inf_fit.rda")
+
+p1_inf <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int_infp1.stan",  # Stan program
+    data = p1_data,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p1_inf, file = "./Stan/fits/pattern1_inf_fit.rda")
+
+p2_infpnonc <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
+    data = p2_data,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p2_infpnonc, file = "./Stan/fits/pattern2_infp2nonc_fit.rda")
+
+p1_infpnonc <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
+    data = p1_data,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p1_infpnonc, file = "./Stan/fits/pattern1_infp1nonc_fit.rda")
 ```
 
 ```{r, stan}
