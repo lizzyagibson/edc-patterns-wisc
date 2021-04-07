@@ -105,51 +105,31 @@ add_ci4int_bayes = function(fit) {
 ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
 whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
 
-mn = whole %>% filter(P1 < mean(whole$P1) + 5*sd(whole$P1)) %>% 
+mn = whole %>% filter(P1 < mean(whole$P1) + 5.9*sd(whole$P1)) %>% 
   mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
 
 # so female is reference
 mn_flip = mn %>% mutate(SEX = fct_rev(SEX))
 
 # Subset so that n matches regression results
-mn_subset = mn %>% dplyr::select(SID, WISC, P = P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,mat_hard,
+mn_subset = mn %>% dplyr::select(SID, WISC, P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE,mat_hard,
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
   mutate(model = "Main Model")
 
 # OLS ####
 load(file = "reg_pat1_fit.rda")
-reg_sum = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
-reg_sum
 
 fit_flip <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
                  MARITAL_STATUS + HOME_SCORE + mat_hard
                , data = mn_flip)
 summary(fit_flip)
 
-# Get slope and se from regression model
-f_slope = reg_sum[12,2][[1]]
-m_slope = reg_sum[2,2][[1]]
-
-fint = 102.1678 + (0.8503) - 
-  (5.4022*0.2517483 ) - # alcohol
-  (1.3726*0.3531469) - # edu 
-  (0.1713*0.3251748) - # married
-  (2.6254*0.4020979 ) # material hardship
-
-mint = 102.1678 - 
-  (5.4022*0.2517483 ) - # alcohol
-  (1.3726*0.3531469) - # edu 
-  (0.1713*0.3251748) - # married
-  (2.6254*0.4020979 ) # material hardship
-
 # Get predicted values
 # this is conditional on everything else!
 pred = as.data.frame(predict(fit_p1a, se.fit = TRUE, type = c("terms")))
-head(pred)[,c(1,2,10,11,12,20)]
 
 # Get predicted values for females
 pred_flip = as.data.frame(predict(fit_flip, se.fit = TRUE, type = c("terms")))
-head(pred_flip)[,c(1,2,10,11,12,20)] # se.fit.P1 = 0.5440310
 
 # Combine predicted outcomes with data
 main = 
@@ -158,27 +138,25 @@ main =
   bind_cols(., flip.se = (pred_flip$se.fit.P1 + pred_flip$se.fit.P1.SEX)) %>% # just get se for female
   dplyr::select(SID, WISC, grep("(SEX|P)", names(.)), flip.se) %>% 
    # -c(M_IQ:model, df, residual.scale, fit.M_IQ:fit.mat_hard, se.fit.M_IQ:se.fit.mat_hard)) %>% 
-  mutate(# predIQm = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX,
-         # predIQf = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, 
-         # fit.sex changes intercept, interaction changes slope
-         predIQ = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, # ifelse(SEX == "Female", predIQf, predIQm),
+  mutate(predIQ = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, # ifelse(SEX == "Female", predIQf, predIQm),
          se.male = se.fit.P1 + se.fit.P1.SEX,
          se.female = flip.se,
          se = ifelse(SEX == "Female", se.female, se.male),
          lci = predIQ - 1.96*se,
-         uci = predIQ + 1.96*se)
-main
+         uci = predIQ + 1.96*se) %>% 
+  dplyr::select(-c(fit.SEX, fit.P1, fit.P1.SEX, se.female, se.male, flip.se,
+                   se.fit.SEX, se.fit.P1.SEX, se.fit.P1)) %>% 
+  mutate(model = "Main")
 
-ols_plot = main %>% 
+main
+save(main, file = "./sense_plot.rda")
+
+main %>% 
   ggplot(aes(x = P)) +
   geom_point(aes(y = WISC), color = "lightgray", size = 0.5) + 
   geom_abline(intercept = mean(main$WISC), slope = 0, 
               color = "darkgray", linetype = "dashed") + 
-  # geom_abline(slope = f_slope, intercept = fint,color="darkgray") +
-  # geom_abline(slope = m_slope, intercept = mint,color="darkgray") +
   geom_line(aes(y = predIQ)) +
-  #geom_line(aes(y = lci), linetype = "dotted") +
-  #geom_line(aes(y = uci), linetype = "dotted") +
   geom_ribbon(aes(ymin = lci, ymax = uci),
               alpha = 0.25, linetype = "dotted", size = 0.25) +
   facet_grid(.~SEX, scales = "free_x") +

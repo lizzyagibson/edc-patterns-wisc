@@ -13,6 +13,9 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center', echo=FALSE)
 options(scipen = 999)
 library(haven)
+library(olsrr)
+library(mvoutlier)
+library(outliers)
 library(tidyverse)
 library(RColorBrewer)
 library(mgcv)
@@ -37,6 +40,7 @@ library(shinystan)
 library(rstanarm)
 library(tictoc)
 library(recipes)
+library(EnvStats)
 
 theme_set(theme_bw(base_size = 20) + 
             theme(strip.background = element_rect(fill="white"),
@@ -177,12 +181,61 @@ as.data.frame(model_sum)[,-c(9:10)] %>%
 ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
 whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
 
-mn = whole %>% filter(P1 < mean(whole$P1) + 5*sd(whole$P1)) %>% 
+mn = whole %>% 
+  filter(P1 != max(P1)) %>%
+  filter(P1 != max(P1)) %>% 
   mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
 ```
 
+### Outliers
+
 ```{r}
-summary(ewa)
+mn_flip = whole %>% mutate(SEX = fct_rev(SEX)) %>%
+  dplyr::select(WISC,P1,SEX,M_IQ,ALCOHOL,M_EDU,M_AGE,MARITAL_STATUS,HOME_SCORE,mat_hard) %>% 
+  drop_na()
+mod = lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + mat_hard
+             , data = mn_flip)
+summary(mod)
+plot(mod)
+
+reduced = mn_flip %>% select(WISC,P1,SEX,M_IQ,ALCOHOL,M_EDU,M_AGE,MARITAL_STATUS,HOME_SCORE,mat_hard) %>% 
+  drop_na() %>% mutate(id = 1:nrow(.))
+
+reduced %>% slice(274)
+reduced %>% slice(264)
+reduced %>% slice(38)
+
+# 274 influential based on Cooks distance, residual vs. leverage plot
+ols_plot_cooksd_chart(mod)
+ols_plot_resid_lev(mod)
+
+mn_flip2 = mn_flip[-which.max(mn_flip$P1),]
+mod2 = lm(WISC ~ P1 + SEX*P1 + SEX + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + mat_hard
+             , data = mn_flip2)
+summary(mod2)
+plot(mod2)
+
+# cooks dist for 264
+ols_plot_cooksd_chart(mod2)
+ols_plot_resid_lev(mod2)
+
+whole[c(319, 307),]$P1
+whole[291,]
+sd(whole$P1)
+
+max(whole$P1) # 319
+max(whole_sub1$P1) # 307
+
+grubbs.test(log(whole$P1)) # highest values is an outlier
+grubbs.test(log(whole_sub1$P1))
+```
+
+```{r}
+ewa_raw <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
+ewa_raw %>% 
+  summarise_all(quantile, probs = seq(0.25, 0.75, 0.25)) %>% bind_cols(probs = seq(0.25, 0.75, 0.25)) %>% t()
 ```
 
 ## Demographics
@@ -462,7 +515,6 @@ fit_p1a <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
 summary(fit_p1a)
 add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
 glance(fit_p1a)[,-c(11:12)]
-save(fit_p1a, file = "reg_pat1_fit.rda")
 ```
 
 #### Pattern 2
@@ -505,11 +557,10 @@ model_table = bind_rows(tabfreq, tabbayes) %>% dplyr::select(model, pattern, eve
          term = str_remove(term, "(P1|P2|p)"),
          term = str_c(pattern, term)) %>% 
     dplyr::select(-`2.5 %`, -`97.5 %`, -pattern)
+model_table
 
 stargazer::stargazer(model_table, summary = F)
 ```
-
-
 
   <br>  
   <br>  
@@ -596,68 +647,89 @@ There are `r ppp_343 %>% filter(is.na(M_IQ)) %>% nrow()` people missing `materna
 ### Sensitivity
 
 ```{r, fig.height=7}
-fit_sense_1 <- gam(WISC ~ s(P1, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + 
-                     MARITAL_STATUS + HOME_SCORE + M_AGE + SMOKER_IN_HOME, 
-                 data = whole)
-fit_sense_2 <- gam(WISC ~ s(P2, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + MARITAL_STATUS + 
-                     HOME_SCORE + M_AGE + SMOKER_IN_HOME,
-                    data = whole)
+subset = whole %>% dplyr::select(SID, WISC, P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE, mat_hard,
+                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
+  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), ~scale(.)[,1])
 
-ps_predict_1 = as_tibble(predict(fit_sense_1, se.fit = T))
-ps_predict_2 = as_tibble(predict(fit_sense_2, se.fit = T))
+fit_sense <- gam(WISC ~ s(P1, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + 
+                     MARITAL_STATUS + HOME_SCORE + M_AGE + mat_hard, 
+                 data = subset)
+summary(fit_sense)
 
-mn_subset = whole %>% dplyr::select(SID, WISC, P_1 = P1, P_2 = P2, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE, SMOKER_IN_HOME,
-                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na()
+pred = as.data.frame(predict.gam(fit_sense, se.fit = T, type="terms"))
+as_tibble(pred)
 
-spline_pred = bind_cols(mn_subset, pred_1 = ps_predict_1$fit, se_1 = ps_predict_1$se.fit,
-                                   pred_2 = ps_predict_2$fit, se_2 = ps_predict_2$se.fit) %>% 
-              mutate(model = "Penalized Spline")
+const = tibble(P1 = seq(0, max(subset$P1), length=289)) %>% 
+  mutate(SEX = "Female",
+          M_IQ = 0, 
+          ALCOHOL = as_factor("No"),
+          M_EDU = "≥ High school degree or equivalent", 
+          M_AGE = 0, 
+          mat_hard = "No",
+          MARITAL_STATUS = "Never Married", 
+          HOME_SCORE = 0)
 
-sense_all = bind_rows(spline_pred, pred) %>% 
-  dplyr::select(-c(M_IQ, ALCOHOL, M_EDU, MARITAL_STATUS, HOME_SCORE, M_AGE, SMOKER_IN_HOME)) %>% 
-  pivot_longer(c(P_1:P_2, pred_1:se_2),
-               names_to = c("term", "pattern"),
-               names_sep = "_") %>% 
-  pivot_wider(names_from = term,
-              values_from = value) %>% 
-  mutate(extreme = ifelse(SID %in% c(453, 1209, 1229), "Yes", "No"),
-         pattern = ifelse(pattern == "2", "Pattern 2", "Pattern 1"))
+pred_f = as.data.frame(predict.gam(fit_sense, newdata = const, se.fit = T, type="terms"))
 
+sense_f = as_tibble(pred_f) %>% 
+  bind_cols(., const) %>% 
+  dplyr::select(grep("(SEX|P1)", names(.))) %>%
+  mutate(predIQ = mean(subset$WISC) + fit.SEX + fit.s.P1..SEXMale + fit.s.P1..SEXFemale,
+         se= se.fit.SEX + se.fit.s.P1..SEXMale + se.fit.s.P1..SEXFemale,
+         lci = predIQ - 1.96*se,
+         uci = predIQ + 1.96*se) %>% 
+              mutate(model = "Sensitivity") %>% 
+  dplyr::select(-c(fit.SEX, fit.s.P1..SEXMale, fit.s.P1..SEXFemale,
+                   se.fit.SEX, se.fit.s.P1..SEXMale, se.fit.s.P1..SEXFemale))
+
+sense_all = subset %>%
+  bind_cols(., pred) %>% 
+  mutate(extreme = ifelse(SID %in% c(1209, 1229), "Yes", "No")) %>% 
+  dplyr::select(WISC, grep("(SEX|P1)", names(.)), extreme) %>% 
+  mutate(predIQ = mean(WISC) + fit.SEX + fit.s.P1..SEXMale + fit.s.P1..SEXFemale,
+         se= se.fit.SEX + se.fit.s.P1..SEXMale + se.fit.s.P1..SEXFemale,
+         lci = predIQ - 1.96*se,
+         uci = predIQ + 1.96*se,
+         model = "Sensitivity") %>% 
+  dplyr::select(-c(fit.SEX, fit.s.P1..SEXMale, fit.s.P1..SEXFemale,
+                   se.fit.SEX, se.fit.s.P1..SEXMale, se.fit.s.P1..SEXFemale))
+```
+
+```{r}
+load("./sense_plot.rda")
+main
+```
+
+```{r}
 pal = brewer.pal(11, "RdBu")[c(2,4,11,10)]
 
-sense_all %>% 
-  ggplot(aes(x = P, fill = interaction(SEX, model))) +
+sense.plot = bind_rows(sense_all, main)
+
+sense.plot %>% 
+  ggplot(aes(x = P1, group = interaction(SEX, model),fill = interaction(SEX, model))) +
   geom_point(aes(y = WISC), alpha=0.25, color="grey") +
   geom_point(aes(y = WISC), color="black",
              data = subset(sense_all, extreme =="Yes")) +
-  geom_smooth(aes(y = pred, color = interaction(SEX, model)), 
-              method = "gam", formula = y ~ s(x), se=F,
-              data = subset(sense_all, model =="Penalized Spline"),
-              linetype = 'dashed', fullrange = TRUE) +
-    geom_smooth(aes(y = pred - 1.96*se, color = interaction(SEX, model)), 
-              method = "gam", formula = y ~ s(x), se=F,
-              data = subset(sense_all, model =="Penalized Spline"),
-              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
-    geom_smooth(aes(y = pred + 1.96*se, color = interaction(SEX, model)), 
-              method = "gam", formula = y ~ s(x), se=F,
-              data = subset(sense_all, model =="Penalized Spline"),
-              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
-  geom_smooth(aes(y = pred, color = interaction(SEX, model)),
-              method = "lm", se=F,
-              data = subset(sense_all, model =="Main Model"),
-              fullrange = TRUE) +
-    geom_smooth(aes(y = pred - 1.96*se, color = interaction(SEX, model)),
-              method = "lm", se=F,
-              data = subset(sense_all, model =="Main Model"),
-              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
-    geom_smooth(aes(y = pred + 1.96*se, color = interaction(SEX, model)),
-              method = "lm", se=F,
-              data = subset(sense_all, model =="Main Model"),
-              linetype = 'dotted', size = 0.5, fullrange = TRUE) +
-  scale_fill_manual(values = pal, labels = c("", "Female", "", "Male")) +
-  scale_color_manual(values = pal, labels = c("", "Female", "", "Male")) +
-  facet_wrap(.~pattern, scales = "free_x") + 
-  labs(y = "WISC Full Scale IQ", x = "Pattern concentration") +
+  # geom_ribbon(aes(ymin = lci,
+  #                 ymax = uci), alpha = 0.5,
+  #             data = sense_f) +
+  # geom_line(aes(y = predIQ), data = sense_f) +
+  geom_ribbon(aes(ymin = lci,
+                  ymax = uci), alpha = 0.5,
+              data = subset(sense_all, SEX == "Male")) +
+  geom_line(aes(y = predIQ),
+            data = subset(sense_all, SEX == "Male")) + 
+  
+  geom_ribbon(aes(ymin = lci,
+                  ymax = uci), alpha = 0.5) +
+  geom_line(aes(y = predIQ), data = sense_f) +
+  geom_ribbon(aes(ymin = lci,
+                  ymax = uci), alpha = 0.5) +
+  geom_line(aes(y = predIQ)) +
+  #scale_fill_manual(values = pal, labels = c("", "Female", "", "Male")) +
+  #scale_color_manual(values = pal, labels = c("", "Female", "", "Male")) +
+  facet_grid(.~SEX, scales = "free_x") +
+  labs(y = "WISC Full Scale IQ", x = "Pattern 1 concentration") +
   theme(legend.title = element_blank())
 ```
 
