@@ -1,3 +1,5 @@
+library(mgcv)
+
 pal = brewer.pal(11, "RdBu")[c(2,4,11,10)]
 
 # DATA ####
@@ -6,13 +8,14 @@ whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCO
 
 whole_cc = whole %>% dplyr::select(SID, WISC, P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE, mat_hard,
                                  MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
-  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), ~scale(.)[,1])
+  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), ~scale(.)[,1]) %>% 
+  mutate(SEX = as_factor(str_c(SEX, "s")))
 
 mn = whole_cc %>% filter(P1 < mean(P1) + 5.5*sd(P1))
 mn_flip = mn %>% mutate(SEX = fct_rev(SEX))
 
 summary(mn$P1)
-summary(whole$P1)
+summary(whole_cc$P1)
 
 # Sensitivity model ####
 fit_sense <- gam(WISC ~ s(P1, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + 
@@ -24,7 +27,7 @@ pred = as.data.frame(predict.gam(fit_sense, se.fit = T, type="terms"))
 as_tibble(pred)
 
 const = tibble(P1 = seq(min(whole_cc$P1), max(whole_cc$P1), length=289)) %>% 
-  mutate(SEX = "Female",
+  mutate(SEX = "Females",
          M_IQ = 0, 
          ALCOHOL = as_factor("No"),
          M_EDU = "≥ High school degree or equivalent", 
@@ -39,26 +42,23 @@ pred_f = as.data.frame(predict.gam(fit_sense, newdata = const, se.fit = T, type=
 sense_f = as_tibble(pred_f) %>% 
   bind_cols(., const) %>% 
   dplyr::select(grep("(SEX|P1)", names(.))) %>%
-  mutate(predIQ = mean(whole_cc$WISC) + fit.SEX + fit.s.P1..SEXMale + fit.s.P1..SEXFemale,
-         se= se.fit.SEX + se.fit.s.P1..SEXMale + se.fit.s.P1..SEXFemale,
+  mutate(predIQ = mean(whole_cc$WISC) + fit.SEX + fit.s.P1..SEXMales + fit.s.P1..SEXFemales,
+         se= se.fit.SEX + se.fit.s.P1..SEXMales + se.fit.s.P1..SEXFemales,
          lci = predIQ - 1.96*se,
          uci = predIQ + 1.96*se) %>% 
-  mutate(model = "Sensitivity",
-         SEX = str_c(SEX, "s")) %>% 
-  dplyr::select(-c(fit.SEX, fit.s.P1..SEXMale, fit.s.P1..SEXFemale,
-                   se.fit.SEX, se.fit.s.P1..SEXMale, se.fit.s.P1..SEXFemale))
+  mutate(model = "Sensitivity") %>% 
+  dplyr::select(-grep("fit", names(.)))
 
 sense_all = whole_cc %>%
   bind_cols(., pred) %>% 
   mutate(extreme = ifelse(SID %in% c(1209, 1229), "Yes", "No")) %>% 
   dplyr::select(WISC, grep("(SEX|P1)", names(.)), extreme) %>% 
-  mutate(predIQ = mean(WISC) + fit.SEX + fit.s.P1..SEXMale + fit.s.P1..SEXFemale,
-         se= se.fit.SEX + se.fit.s.P1..SEXMale + se.fit.s.P1..SEXFemale,
+  mutate(predIQ = mean(WISC) + fit.SEX + fit.s.P1..SEXMales + fit.s.P1..SEXFemales,
+         se= se.fit.SEX + se.fit.s.P1..SEXMales + se.fit.s.P1..SEXFemales,
          lci = predIQ - 1.96*se,
          uci = predIQ + 1.96*se,
          model = "Sensitivity") %>% 
-  dplyr::select(-c(fit.SEX, fit.s.P1..SEXMale, fit.s.P1..SEXFemale,
-                   se.fit.SEX, se.fit.s.P1..SEXMale, se.fit.s.P1..SEXFemale))
+  dplyr::select(-grep("fit", names(.)))
 
 # Just whole data
 sense_all %>% 
@@ -68,9 +68,9 @@ sense_all %>%
              data = subset(sense_all, extreme =="Yes")) +
   geom_ribbon(aes(ymin = lci,
                   ymax = uci), 
-              alpha = 0.5, data = subset(sense_all, SEX == "Male")) +
+              alpha = 0.5, data = subset(sense_all, SEX == "Males")) +
   geom_line(aes(y = predIQ),
-            data = subset(sense_all, SEX == "Male")) + 
+            data = subset(sense_all, SEX == "Males")) + 
   geom_ribbon(aes(ymin = lci,
                   ymax = uci), 
               alpha = 0.5, data = sense_f) +
@@ -87,13 +87,17 @@ main_flip <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
 main_fit <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
                 MARITAL_STATUS + HOME_SCORE + mat_hard
               , data = mn)
+
 summary(main_fit)
+summary(main_flip)
+
 # Get predicted values
 # this is conditional on everything else!
 pred_main = as.data.frame(predict(main_fit, se.fit = TRUE, type = c("terms")))
 
 # Get predicted values for females
 pred_flip = as.data.frame(predict(main_flip, se.fit = TRUE, type = c("terms")))
+as_tibble(pred_flip)
 
 # Combine predicted outcomes with data
 main = 
@@ -104,11 +108,10 @@ main =
   mutate(predIQ = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, # ifelse(SEX == "Female", predIQf, predIQm),
          se.male = se.fit.P1 + se.fit.P1.SEX,
          se.female = flip.se,
-         se = ifelse(SEX == "Female", se.female, se.male),
+         se = ifelse(SEX == "Females", se.female, se.male),
          lci = predIQ - 1.96*se,
          uci = predIQ + 1.96*se) %>% 
-  dplyr::select(-c(fit.SEX, fit.P1, fit.P1.SEX, se.female, se.male, flip.se,
-                   se.fit.SEX, se.fit.P1.SEX, se.fit.P1)) %>% 
+  dplyr::select(-grep("fit", names(.))) %>% 
   mutate(model = "Main")
 
 main %>% 
@@ -128,8 +131,7 @@ main %>%
   labs(y = "WISC full scale IQ", x = "PHT pattern concentration") 
 
 # Final plot ####
-sense_plot = bind_rows(sense_all, main) %>% 
-  mutate(SEX = ifelse(SEX == "Male", "Males", "Females"))
+sense_plot = bind_rows(sense_all, main)
 
 #pdf("./Figures/sense_plot.pdf")
 sense_plot %>% 
@@ -149,5 +151,5 @@ sense_plot %>%
   facet_grid(.~SEX, scales = "free_x") +
   labs(y = "WISC Full Scale IQ", x = "Pattern 1 concentration") +
   theme(legend.title = element_blank(),
-        legend.text = element_text(size = 15))
+        legend.text = element_text(size = 15)) + scale_fill_nejm() + scale_color_nejm()
 #dev.off()
