@@ -186,7 +186,8 @@ bayes = bind_cols(ppp_cov, e_wa, var_wa) %>%
         dplyr::select(-GEST, -ETH) %>% 
         rename(HOME_SCORE = HOMETOT) %>% 
         filter(P1 != max(P1)) %>%
-        filter(P1 != max(P1)) %>%  # removes two females, 1 male
+        filter(P1 != max(P1)) %>%  # removes two females
+        # filter(P1 != max(P1)) %>%  # removes 1 male
         drop_na() %>% 
         mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
         mutate_if(is.character, as_factor)
@@ -246,14 +247,14 @@ p1_data = list(N = N,
 #     cores = 2)                    # number of cores
 # save(p2_non, file = "./Stan/fits/pattern2_noninf_fit.rda")
 # 
-# p1_non <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
-#     data = p1_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# # save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
+p1_non <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
+    data = p1_data,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+# save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
 # save(p1_non, file = "./Stan/fits/pattern1_noninf_fit.rda")
 # 
 # p2_inf <- stan(
