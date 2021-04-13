@@ -114,7 +114,7 @@ add_ci4interaction <- function(fit, term1, term2) {
 add_ci4int_bayes = function(fit) {
 int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
 
-params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
+params = names(p1_gamma_un)[grep("(alpha|beta)", names(p1_gamma_un))]
 model_sum = summary(fit, params)$summary
 
 ext <- extract(fit)
@@ -183,6 +183,10 @@ as.data.frame(model_sum)[,-c(9:10)] %>%
 e_wa_un <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
 var_wa_un <- readMat(here::here("./Data/mn2_WA_var_un.mat"))[[1]] %>% as_tibble() %>% rename(varP1 = V1, varP2 = V2)
 
+# STANDARDIZED NORMAL
+e_wa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1_scaled = V1, P2_scaled = V2)
+var_wa <- readMat(here::here("./Data/mn2_WA_var_sd1.mat"))[[1]] %>% as_tibble() %>% rename(varP1_scaled = V1, varP2_scaled = V2)
+
 # UNSTANDARDIZED GAMMA*GAMMA
 alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
 beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
@@ -190,7 +194,7 @@ beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% r
 alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
 beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
 
-bayes_un = bind_cols(ppp_cov, e_wa_un, var_wa_un, alpha_w, beta_w) %>% 
+bayes = bind_cols(ppp_cov, e_wa, var_wa, e_wa_un, var_wa_un, alpha_w, beta_w) %>% 
         dplyr::select(-GEST, -ETH) %>% 
         rename(HOME_SCORE = HOMETOT) %>% 
         filter(P1 != max(P1)) %>%
@@ -200,26 +204,44 @@ bayes_un = bind_cols(ppp_cov, e_wa_un, var_wa_un, alpha_w, beta_w) %>%
         mutate_if(is.character, as_factor)
 
 # For stan model ####
-N = nrow(bayes_un)
-C = 7
+N = nrow(bayes)
+C = 7 # number of covariates
 x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
-                 data = bayes_un)[,-1]
-sex = model.matrix(WISC ~ SEX, data = bayes_un)[,-1]
-y = bayes_un$WISC
+                 data = bayes)[,-1]
+sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
+y = bayes$WISC
 
 # Predictors of interest change
+```
 
+### Unscaled
+```{r, dat3}
 # Normal
-P1_un = bayes_un$P1
-sd_ewa_un = bayes_un %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
+P1_un = bayes$P1
+sd_ewa_un = bayes%>% dplyr::select(varP1, varP2) %>% mutate_all(~sqrt(.))
 sdP1_un = sd_ewa_un$varP1
 
 # Gamma
-Walpha1_un = bayes_un$walpha1
-Wbeta1_un  = bayes_un$wbeta1
+Walpha1_un = bayes$walpha1
+Wbeta1_un  = bayes$wbeta1
 
 Aalpha1_un = alpha_a[[1]]
 Abeta1_un  = beta_a[[1]]
+```
+
+### Standardized
+```{r, dat2}
+# Normal
+P1_sc = bayes$P1_scaled
+sd_ewa_sc = bayes %>% dplyr::select(varP1_scaled, varP2_scaled) %>% mutate_all(~sqrt(.))
+sdP1_sc = sd_ewa_sc$varP1_scaled
+
+# Gamma
+#Walpha1_sc = bayes$walpha1 # don't scale alpha, only scale beta
+Wbeta1_sc  = (bayes$wbeta1/17.3043)*4.4074
+
+# Aalpha1_sc = alpha_a[[1]] # don't scale alpha, only scale beta
+Abeta1_sc  = (beta_a[[1]]/17.3043)*4.4074
 ```
 
 *Just for pattern 1 for now*  
@@ -242,11 +264,48 @@ p1_gamma_un_dat = list(N = N,
                   beta_w = Wbeta1_un,
                   alpha_a = Aalpha1_un,
                   beta_a = Abeta1_un)
+
+p1_norm_scaled_dat = list(N = N,
+                  C = C,
+                  x = x,
+                  y = y,
+                  sex = sex,
+                  ewa = P1_sc,
+                  sd_ewa = sdP1_sc)
+
+p1_gamma_scaled_dat = list(N = N,
+                  C = C,
+                  x = x,
+                  y = y,
+                  sex = sex,
+                  alpha_w = Walpha1_un,
+                  beta_w = Wbeta1_sc,
+                  alpha_a = Aalpha1_un,
+                  beta_a = Abeta1_un)
 ```
 
 ## Bayesian models
 
 ```{r}
+
+p1_gamma_scaled <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+    data = p1_gamma_scaled_dat,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p1_gamma_scaled, file = "./Stan/fits/pattern1_gamma_scaled.rda")
+
+p1_norm_scaled <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
+    data = p1_norm_scaled_dat,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p1_norm_scaled, file = "./Stan/fits/pattern1_norm_scaled.rda")
+
 p1_gamma_un <- stan(
   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
     data = p1_gamma_un_dat,               # named list of data
@@ -254,8 +313,7 @@ p1_gamma_un <- stan(
     warmup = 1000,                # number of warmup iterations per chain
     iter = 5000,                  # total number of iterations per chain
     cores = 2)                    # number of cores
-# save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
-save(p1_gamma_un, file = "./Stan/fits/pattern1_noninf_fit.rda")
+save(p1_gamma_un, file = "./Stan/fits/pattern1_gamma_un.rda")
 
 p1_norm_un <- stan(
   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
@@ -264,7 +322,7 @@ p1_norm_un <- stan(
     warmup = 1000,                # number of warmup iterations per chain
     iter = 5000,                  # total number of iterations per chain
     cores = 2)                    # number of cores
-save(p1_norm_un_dat, file = "./Stan/fits/pattern2_inf_fit.rda")
+save(p1_norm_un, file = "./Stan/fits/pattern1_norm_un.rda")
 ```
 
 ```{r, stan}
@@ -276,507 +334,53 @@ load("./Stan/fits/pattern1_norm_un.rda")
 
 #### Pattern 1
 
-##### Non-informative
 ```{r, p1non}
-params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
-print(p1_non, params)
-```
+params = names(p1_gamma_un)[grep("(alpha|beta)", names(p1_gamma_un))]
 
-##### Informative Pattern
-```{r, p1inf}
-print(p1_inf, params)
-```
-
-##### Informative Everything
-```{r, p1inf3}
-print(p1_infpnonc, params)
-```
-
-#### Pattern 2
-
-##### Non-informative
-```{r, p2non}
-print(p2_non, params)
-```
-
-##### Informative Pattern
-```{r, p2inf}
-print(p2_inf, params)
-```
-
-##### Informative Everything
-```{r, p1inf1}
-print(p2_infpnonc, params)
-```
-
-### Posterior prediction
-
-#### Pattern 1
-
-##### Non-informative
-```{r, p1pppnon}
-y = bayes$WISC
-
-# Extract fit
-ext_p1 <- extract(p1_non)
-str(ext_p1)
-
-# WA = ext_p1$WA
-# dim(WA)
-# hist(WA[,4])
-
-y_pred_p1 = ext_p1$y_tilde
-
-# random sample of y
-samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
-y_post_samp_p1 = y_pred_p1[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p1)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Pattern
-```{r, p1pppinf}
-# Extract fit
-ext_p1i <- extract(p1_inf)
-
-y_pred_p1i = ext_p1i$y_tilde
-
-# random sample of y
-y_post_samp_p1i = y_pred_p1i[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p1i)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Everything
-```{r, p1pppinf1}
-# Extract fit
-ext_p1inc <- extract(p1_infpnonc)
-
-y_pred_p1inc = ext_p1inc$y_tilde
-
-# random sample of y
-y_post_samp_p1inc = y_pred_p1inc[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p1inc)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-#### Pattern 2
-
-##### Non-informative
-```{r, p2pppnon}
-# Extract fit
-ext_p2 <- extract(p2_non)
-
-y_pred_p2 = ext_p2$y_tilde
-
-# random sample of y
-y_post_samp_p2 = y_pred_p2[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p2)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Pattern
-```{r, p2pppinf}
-# Extract fit
-ext_p2i <- extract(p2_inf)
-
-y_pred_p2i = ext_p2i$y_tilde
-
-# random sample of y
-y_post_samp_p2i = y_pred_p2i[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p2i)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Everything
-```{r, p2pppinf1}
-# Extract fit
-ext_p2inc <- extract(p2_infpnonc)
-
-y_pred_p2inc = ext_p2inc$y_tilde
-
-# random sample of y
-y_post_samp_p2inc = y_pred_p2inc[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p2inc)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
+print(p1_gamma_un, params)
+print(p1_norm_un, params)
 ```
 
 ### Coefficients of interest
 
 #### Pattern 1
 
-##### Non-informative
 ```{r, p1coefnon}
 # Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p1_non,
+mcmc_areas(p1_gamma_un,
            pars = params[(length(params)-2):length(params)],
            prob = 0.95) + ggtitle("Posterior distributions",
                                   "with medians and 95% intervals") +
   scale_y_discrete(labels=c(
   "beta_int" = "Interaction", 
   "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males")) + xlim(c(-17,17))
-```
+  "beta_p" = "P1 in males")) + xlim(c(-50,20))
 
-##### Informative Pattern
-```{r, p1coefinf}
 # Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p1_inf,
+mcmc_areas(p1_norm_un,
            pars = params[(length(params)-2):length(params)],
            prob = 0.95) + ggtitle("Posterior distributions",
                                   "with medians and 95% intervals") +
   scale_y_discrete(labels=c(
   "beta_int" = "Interaction", 
   "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males")) + xlim(c(-17,17))
-```
-
-##### Informative Everything
-```{r, p1coefinf1}
-# Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p1_infpnonc,
-           pars = params[(length(params)-2):length(params)],
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "beta_int" = "Interaction", 
-  "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males")) + xlim(c(-17,17))
-```
-
-#### Pattern 2
-
-##### Non-informative
-```{r, p2coefnon}
-# Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p2_non,
-           pars = params[(length(params)-2):length(params)],
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "beta_int" = "Interaction", 
-  "beta_sex" =  "Sex female",
-  "beta_p" = "P2 in males")) + xlim(c(-17,17))
-```
-
-##### Informative Pattern
-```{r, p2coefinf}
-# Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p2_inf,
-           pars = params[(length(params)-2):length(params)],
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "beta_int" = "Interaction", 
-  "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males")) + xlim(c(-17,17))
-```
-
-##### Informative Everything
-```{r, p2coefinf1}
-# Plot pattern beta coefficient with uncertainty
-color_scheme_set("brightblue")
-mcmc_areas(p2_infpnonc,
-           pars = params[(length(params)-2):length(params)],
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "beta_int" = "Interaction", 
-  "beta_sex" =  "Sex female",
-  "beta_p" = "P1 in males")) + xlim(c(-17,17))
+  "beta_p" = "P1 in males")) + xlim(c(-50,20))
 ```
 
 ### Patterns by sex
 
 #### Pattern 1
 
-##### Non-informative
 ```{r, p1patnon}
-add_ci4int_bayes(p1_non)
-```
+add_ci4int_bayes(p1_gamma_un)
 
-##### Informative Pattern
-```{r, p1patinf}
-add_ci4int_bayes(p1_inf)
-```
-
-##### Informative Everything
-```{r, p1patinf1}
-add_ci4int_bayes(p1_infpnonc)
-```
-
-##### All
-
-```{r, all1}
-add_ci4int_bayes(p1_non)[,1:2] %>% 
-  rename(non_inf = mean) %>% 
-  bind_cols(., inf_pat =add_ci4int_bayes(p1_inf)[,2]) %>% 
-  bind_cols(., inf_cov = add_ci4int_bayes(p1_infpnonc)[,2])
-```
-
-#### Pattern 2
-
-##### Non-informative
-```{r, p2patnon}
-add_ci4int_bayes(p2_non)
-```
-
-##### Informative Pattern
-```{r, p2patinf}
-add_ci4int_bayes(p2_inf)
-```
-
-##### Informative Everything
-```{r, p2patinf1}
-add_ci4int_bayes(p2_infpnonc)
+add_ci4int_bayes(p1_norm_un)
 ```
 
 #### All
 
 ```{r, all2}
-add_ci4int_bayes(p1_non)[,1:2] %>% 
-  rename(non_inf = mean) %>% 
-  bind_cols(., inf_pat =add_ci4int_bayes(p1_inf)[,2]) %>% 
-  bind_cols(., inf_ncov = add_ci4int_bayes(p1_infpnonc)[,2])
-
-add_ci4int_bayes(p2_non)[,1:2] %>% 
-  rename(non_inf = mean) %>% 
-  bind_cols(., inf_pat =add_ci4int_bayes(p2_inf)[,2]) %>% 
-  bind_cols(., inf_ncov = add_ci4int_bayes(p2_infpnonc)[,2])
+add_ci4int_bayes(p1_gamma_un)[,1:3] %>% 
+  rename(gamma = mean, gamma_se = se_mean) %>% 
+  bind_cols(., normal = add_ci4int_bayes(p1_norm_un)[,2], normal_se = add_ci4int_bayes(p1_norm_un)[,3])
 ```
-
-```{r}
-bayesp1_i = add_ci4int_bayes(p1_inf)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
-bayesp2_i = add_ci4int_bayes(p2_inf)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
-
-bayesp1_h = add_ci4int_bayes(p1_infpnonc)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
-bayesp2_h = add_ci4int_bayes(p2_infpnonc)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
-
-tabbayes_i = bind_rows(bayesp1_i, bayesp2_i)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
-            rename(term = beta, estimate = `50%`) %>% 
-            rename_all(~str_replace(., "%", " %")) %>% 
-            mutate(model = "Weakly informative")
-
-tabbayes_h = bind_rows(bayesp1_h, bayesp2_h)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
-            rename(term = beta, estimate = `50%`) %>% 
-            rename_all(~str_replace(., "%", " %")) %>% 
-            mutate(model = "Weakly/non- informative")
-
-supp_table = bind_rows(tabbayes_i, tabbayes_h) %>% dplyr::select(model, pattern, everything()) %>% 
-  arrange(model, pattern, term) %>% 
-  mutate_if(is.numeric, round, 1) %>% 
-  mutate(`95% Confidence Interval` = str_c("(", `2.5 %`, ", ", `97.5 %`, ")")) %>% 
-  mutate(term = case_when(term == "sex*p" | grepl("SEX", term) ~ " interaction term",
-                          TRUE ~ term),
-         term = str_remove(term, "(P1|P2|p)"),
-         term = str_c(pattern, term)) %>% 
-    dplyr::select(-`2.5 %`, -`97.5 %`, -pattern)
-supp_table
-
-stargazer::stargazer(supp_table[,3:4], summary = F)
-```
-
-
-### Viz
-
-#### Pattern 1
-
-##### Non-informative
-```{r}
-p1non_coef = cbind(ext_p1$beta_int, ext_p1$beta_sex, ext_p1$beta_p) %>% 
-  as_tibble() %>% 
-  rename(int=1, sex=2, p_male=3) %>% 
-             mutate(p_female = p_male + int) %>% 
-  dplyr::select(-sex)
-
-mcmc_areas(p1non_coef,
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-10,10))
-```
-
-##### Informative Pattern
-```{r}
-p1i_coef = cbind(ext_p1i$beta_int, ext_p1i$beta_sex, ext_p1i$beta_p) %>% 
-  as_tibble() %>% 
-  rename(int=1, sex=2, p_male=3) %>% 
-             mutate(p_female = p_male + int) %>% 
-  dplyr::select(-sex)
-
-mcmc_areas(p1i_coef,
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-10,10))
-```
-
-##### Informative Everything
-```{r}
-p1i_coef_nc = cbind(ext_p1inc$beta_int, ext_p1inc$beta_sex, ext_p1inc$beta_p) %>% 
-  as_tibble() %>% 
-  rename(int=1, sex=2, p_male=3) %>% 
-             mutate(p_female = p_male + int) %>% 
-  dplyr::select(-sex)
-
-mcmc_areas(p1i_coef_nc,
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-10,10))
-```
-
-#### Pattern 2
-
-##### Non-informative
-```{r}
-p2non_coef = cbind(ext_p2$beta_int, ext_p2$beta_sex, ext_p2$beta_p) %>% 
-  as_tibble() %>% 
-  rename(int=1, sex=2, p_male=3) %>% 
-             mutate(p_female = p_male + int) %>% 
-  dplyr::select(-sex)
-
-mcmc_areas(p2non_coef,
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-12,12))
-```
-
-##### Informative Pattern
-```{r}
-p2i_coef = cbind(ext_p2i$beta_int, ext_p2i$beta_sex, ext_p2i$beta_p) %>% 
-  as_tibble() %>% 
-  rename(int=1, sex=2, p_male=3) %>% 
-             mutate(p_female = p_male + int) %>% 
-  dplyr::select(-sex)
-
-mcmc_areas(p2i_coef,
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-12,12))
-```
-
-##### Informative Everything
-```{r}
-p2i_coef_nc = cbind(ext_p2inc$beta_int, ext_p2inc$beta_sex, ext_p2inc$beta_p) %>% 
-  as_tibble() %>% 
-  rename(int=1, sex=2, p_male=3) %>% 
-             mutate(p_female = p_male + int) %>% 
-  dplyr::select(-sex)
-
-mcmc_areas(p2i_coef_nc,
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals") +
-  scale_y_discrete(labels=c(
-  "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-12,12))
-```
-
-```{r, include = F}
-color_scheme_view("brightblue")
-color_scheme_get("brightblue")
-
-plot_area = function(data) {
-
-  # Get kernel density estimate as a data frame
-  dens = map_df(data, ~ {
-    d = density(.x, na.rm=TRUE)
-    tibble(x=d$x, y=d$y)
-  }, .id="name")
-  
-  # Set relative width of median line
-  e = diff(range(dens$x)) * 0.003
-  
-  # Get credible interval width and median
-  cred.int = data %>% 
-    pivot_longer(cols=everything()) %>% 
-    group_by(name) %>% 
-    summarise(CI=list(eti(value, ci=.95)),
-              m=median(value, na.rm=TRUE)) %>% 
-    unnest_wider(CI)
-  
-dens_plt = dens %>% left_join(cred.int) 
-
-dens_plt %>% 
-    ggplot(aes(y=name, x=x, height=y), color = "#cce5ff") +
-      geom_vline(xintercept=0, colour="grey70", linetype = "dashed") +
-      geom_ridgeline(data= dens_plt %>% group_by(name) %>%
-                       filter(x >= CI_low & x <= CI_high),
-                     fill="#cce5ff") +
-      geom_ridgeline(data= dens_plt %>% group_by(name) %>% 
-                       filter(x >= (m-e) & x<= (m+e)),
-                     fill="#198bff") +
-      geom_ridgeline(fill=NA, color = "#0065cc") + 
-      geom_ridgeline(fill=NA, aes(height=0), color = "#0065cc") +
-      labs(y=NULL, x=NULL) +
-    scale_y_discrete(labels=c(
-  "int" = "Interaction", 
-  "p_male" = "Pattern in males",
-  "p_female" = "Pattern in females")) + 
-  ggtitle("Posterior distributions", "with medians and 95% intervals") 
-}
-
-plot_area(p2i_coef)
-```
-
-
