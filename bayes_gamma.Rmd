@@ -1,8 +1,8 @@
 ---
-title: "Phthalate & phenol exposure patterns"
-subtitle: "& child intelligence in M&N cohort"
+title: "Bayesian models with Gamma*Gamma distributions"
+subtitle: "& comparison with Normal approximation"
 author: "Lizzy Gibson"
-date: "3/16/2021"
+date: "4/13/2021"
 output:
   html_document:
     toc: yes
@@ -179,10 +179,18 @@ as.data.frame(model_sum)[,-c(9:10)] %>%
 * 9 phthalates  
 
 ```{r, dat}
-e_wa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
-var_wa <- readMat(here::here("./Data/mn2_WA_var_sd1.mat"))[[1]] %>% as_tibble() %>% rename(varP1 = V1, varP2 = V2)
+# UNSTANDARDIZED NORMAL
+e_wa_un <- readMat(here::here("./Data/mn2_EWA_un.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
+var_wa_un <- readMat(here::here("./Data/mn2_WA_var_un.mat"))[[1]] %>% as_tibble() %>% rename(varP1 = V1, varP2 = V2)
 
-bayes = bind_cols(ppp_cov, e_wa, var_wa) %>% 
+# UNSTANDARDIZED GAMMA*GAMMA
+alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
+beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
+
+alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
+beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
+
+bayes_un = bind_cols(ppp_cov, e_wa_un, var_wa_un, alpha_w, beta_w) %>% 
         dplyr::select(-GEST, -ETH) %>% 
         rename(HOME_SCORE = HOMETOT) %>% 
         filter(P1 != max(P1)) %>%
@@ -192,114 +200,76 @@ bayes = bind_cols(ppp_cov, e_wa, var_wa) %>%
         mutate_if(is.character, as_factor)
 
 # For stan model ####
-N = nrow(bayes)
-C = ncol(bayes) - 6 - 1 -1
+N = nrow(bayes_un)
+C = 7
 x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
-                 data = bayes)[,-1]
-sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
-y = bayes$WISC
-sd(y)
+                 data = bayes_un)[,-1]
+sex = model.matrix(WISC ~ SEX, data = bayes_un)[,-1]
+y = bayes_un$WISC
 
-P2 = bayes$P2
-P1 = bayes$P1
+# Predictors of interest change
 
-sd_ewa = bayes %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
-sdP1 = sd_ewa$varP1
-sdP2 = sd_ewa$varP2
+# Normal
+P1_un = bayes_un$P1
+sd_ewa_un = bayes_un %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
+sdP1_un = sd_ewa_un$varP1
 
-# Conditioning on covariates: M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard
-# cont variables = 0, cat variables = proportion in data
-x_const_1 = c(0, 0.5, 0.5, 0, 0, 0.5, 0.5)
-x_const_p = c(0, 0.3531469, 0.3251748, 0, 0, 0.2517483, 0.4020979)
+# Gamma
+Walpha1_un = bayes_un$walpha1
+Wbeta1_un  = bayes_un$wbeta1
 
-x_const   = kronecker(matrix(1,286,1), t(x_const_p))
+Aalpha1_un = alpha_a[[1]]
+Abeta1_un  = beta_a[[1]]
 ```
 
-```{r, standat}
-p2_data = list(N = N,
-                  C = C,
-                  x = x,
-                  y = y,
-                  sex = sex,
-                  ewa = P2,
-                  sd_ewa = sdP2)
+*Just for pattern 1 for now*  
 
-p1_data = list(N = N,
+```{r, standat}
+p1_norm_un_dat = list(N = N,
                   C = C,
                   x = x,
-                  #x_const = x_const,
                   y = y,
                   sex = sex,
-                  ewa = P1,
-                  sd_ewa = sdP1)
+                  ewa = P1_un,
+                  sd_ewa = sdP1_un)
+
+p1_gamma_un_dat = list(N = N,
+                  C = C,
+                  x = x,
+                  y = y,
+                  sex = sex,
+                  alpha_w = Walpha1_un,
+                  beta_w = Wbeta1_un,
+                  alpha_a = Aalpha1_un,
+                  beta_a = Abeta1_un)
 ```
 
 ## Bayesian models
 
 ```{r}
-# p2_non <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
-#     data = p2_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p2_non, file = "./Stan/fits/pattern2_noninf_fit.rda")
-# 
-# p1_non <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
-#     data = p1_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# # save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
-# save(p1_non, file = "./Stan/fits/pattern1_noninf_fit.rda")
-# 
-# p2_inf <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp2.stan",  # Stan program
-#     data = p2_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p2_inf, file = "./Stan/fits/pattern2_inf_fit.rda")
-# 
-# p1_inf <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp1.stan",  # Stan program
-#     data = p1_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p1_inf, file = "./Stan/fits/pattern1_inf_fit.rda")
-# 
-# p2_infpnonc <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
-#     data = p2_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p2_infpnonc, file = "./Stan/fits/pattern2_infp2nonc_fit.rda")
-# 
-# p1_infpnonc <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
-#     data = p1_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p1_infpnonc, file = "./Stan/fits/pattern1_infp1nonc_fit.rda")
+p1_gamma_un <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+    data = p1_gamma_un_dat,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+# save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
+save(p1_gamma_un, file = "./Stan/fits/pattern1_noninf_fit.rda")
+
+p1_norm_un <- stan(
+  file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
+    data = p1_norm_un_dat,               # named list of data
+    chains = 4,                   # number of Markov chains
+    warmup = 1000,                # number of warmup iterations per chain
+    iter = 5000,                  # total number of iterations per chain
+    cores = 2)                    # number of cores
+save(p1_norm_un_dat, file = "./Stan/fits/pattern2_inf_fit.rda")
 ```
 
 ```{r, stan}
-load("./Stan/fits/pattern2_noninf_fit.rda")
-load("./Stan/fits/pattern2_inf_fit.rda")
-load("./Stan/fits/pattern1_noninf_fit.rda")
-load("./Stan/fits/pattern1_inf_fit.rda")
-load("./Stan/fits/pattern2_infp2nonc_fit.rda")
-load("./Stan/fits/pattern1_infp1nonc_fit.rda")
+load("./Stan/fits/pattern1_gamma_un.rda")
+load("./Stan/fits/pattern1_norm_un.rda")
 ```
 
 ### Summary

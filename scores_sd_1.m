@@ -64,3 +64,15 @@ title('varWA sd1')
 
 save("/Users/lizzy/ppp_patterns/Data/mn2_EWA_sd1.mat", 'EWA_sd1');
 save("/Users/lizzy/ppp_patterns/Data/mn2_WA_var_sd1.mat", 'varWA_sd1');
+
+save("/Users/lizzy/ppp_patterns/Data/mn2_Walpha.mat", 'alphaW');
+save("/Users/lizzy/ppp_patterns/Data/mn2_Wbeta.mat", 'betaW');
+save("/Users/lizzy/ppp_patterns/Data/mn2_Aalpha.mat", 'alphaA');
+save("/Users/lizzy/ppp_patterns/Data/mn2_Abeta.mat", 'betaA');
+
+save("/Users/lizzy/ppp_patterns/Data/mn2_EWA.mat", 'EWA_scaled');
+save("/Users/lizzy/ppp_patterns/Data/mn2_EH.mat", 'EH_scaled');
+
+save("/Users/lizzy/ppp_patterns/Data/mn2_EWA_un.mat", 'EWA');
+save("/Users/lizzy/ppp_patterns/Data/mn2_WA_var_un.mat", 'varWA');
+
