@@ -6,8 +6,11 @@ data {
   vector[N] y;      // outcome vector
   vector[N] sex;    // sex vector (separate for interaction)
   
-  vector<lower=0>[N] ewa;    // mu for pattern
-  vector<lower=0>[N] sd_ewa; // std dev for pattern
+  vector<lower=0>[N] alpha_w;    // gamma likelihood
+  vector<lower=0>[N] beta_w;     // gamma likelihood
+  
+  real<lower=0> alpha_a;    // gamma likelihood
+  real<lower=0> beta_a;     // gamma likelihood
 }
 
 // The parameters accepted by the model.
@@ -20,7 +23,8 @@ parameters {
   real beta_sex;       // coefficient for sex
   real beta_p;         // coefficients for patterns
   
-  vector<lower=0>[N] WA;  // pattern scores with uncertainty
+  vector<lower=0>[N] W;  // pattern scores with uncertainty
+  real<lower=0> a;  // pattern scores with uncertainty
 }
 
 // interaction term here
@@ -29,7 +33,9 @@ parameters {
 // Are usually the arguments to the log-likelihood function that is evaluated in the model block, 
 // although in hierarchical models the line between the prior and the likelihood can be drawn in multiple ways
 transformed parameters {
+    vector<lower=0>[N] WA; // Wa drawn from distribution
     vector<lower=0>[N] inter; // pattern score * sex
+    WA    = W * a;
     inter = WA .* sex;
 }
 
@@ -48,8 +54,10 @@ model {
   beta_int ~ normal(0, 2.5*13.4);
   
   for (n in 1:N) { // draw patterns scores from this distribution
-      WA[n] ~ normal(ewa[n], sd_ewa[n]);
-    }
+      W[n] ~ gamma(alpha_w[n], beta_w[n]);
+  }
+  
+  a ~ gamma(alpha_a, beta_a); // single a distribution, all W are multiplied by this
   
   y ~ normal(((WA * beta_p) + (inter * beta_int) + 
               (sex * beta_sex) + (x * beta_c) + alpha), sigma);  // likelihood

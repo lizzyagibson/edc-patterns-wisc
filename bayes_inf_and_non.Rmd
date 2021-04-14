@@ -114,7 +114,7 @@ add_ci4interaction <- function(fit, term1, term2) {
 add_ci4int_bayes = function(fit) {
 int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
 
-params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
+params = names(fit)[grep("(alpha|beta)", names(fit))]
 model_sum = summary(fit, params)$summary
 
 ext <- extract(fit)
@@ -180,127 +180,149 @@ as.data.frame(model_sum)[,-c(9:10)] %>%
 
 ```{r, dat}
 e_wa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
-var_wa <- readMat(here::here("./Data/mn2_WA_var_sd1.mat"))[[1]] %>% as_tibble() %>% rename(varP1 = V1, varP2 = V2)
+# need ewa to drop two outliers
 
-bayes = bind_cols(ppp_cov, e_wa, var_wa) %>% 
+# UNSTANDARDIZED GAMMA*GAMMA
+alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
+beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
+
+alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
+beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
+
+bayes = bind_cols(ppp_cov, e_wa, alpha_w, beta_w) %>% 
         dplyr::select(-GEST, -ETH) %>% 
         rename(HOME_SCORE = HOMETOT) %>% 
         filter(P1 != max(P1)) %>%
         filter(P1 != max(P1)) %>%  # removes two females
-        # filter(P1 != max(P1)) %>%  # removes 1 male
         drop_na() %>% 
         mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
         mutate_if(is.character, as_factor)
 
 # For stan model ####
 N = nrow(bayes)
-C = ncol(bayes) - 6 - 1 -1
+C = 7 # number of covariates
 x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
                  data = bayes)[,-1]
 sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
 y = bayes$WISC
-sd(y)
 
-P2 = bayes$P2
-P1 = bayes$P1
+# Predictors of interest
 
-sd_ewa = bayes %>% dplyr::select(varP2:varP1) %>% mutate_all(~sqrt(.))
-sdP1 = sd_ewa$varP1
-sdP2 = sd_ewa$varP2
+### Unscaled Gamma
+Walpha1 = bayes$walpha1
+# Wbeta1  = bayes$wbeta1 # want the scaled W beta
 
-# Conditioning on covariates: M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard
-# cont variables = 0, cat variables = proportion in data
-x_const_1 = c(0, 0.5, 0.5, 0, 0, 0.5, 0.5)
-x_const_p = c(0, 0.3531469, 0.3251748, 0, 0, 0.2517483, 0.4020979)
+Aalpha1 = alpha_a[[1]]
+Abeta1  = beta_a[[1]]
 
-x_const   = kronecker(matrix(1,286,1), t(x_const_p))
+Walpha2 = bayes$walpha2
+# Wbeta2 = bayes$wbeta2 # want scaled beta
+
+Aalpha2 = alpha_a[[2]]
+Abeta2  = beta_a[[2]]
+
+### Scaled and Standardized Gamma
+# don't scale alpha, only scale beta
+Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
+Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
+
+# don't scale a only scale W
+# don't scale alpha, only scale beta
+# Abeta1_sc  = (beta_a[[1]]/17.3043)*4.4074
 ```
 
 ```{r, standat}
-p2_data = list(N = N,
+p1_dat = list(N = N,
                   C = C,
                   x = x,
                   y = y,
                   sex = sex,
-                  ewa = P2,
-                  sd_ewa = sdP2)
-
-p1_data = list(N = N,
+                  alpha_w = Walpha1,
+                  beta_w  = Wbeta1,
+                  alpha_a = Aalpha1,
+                  beta_a  = Abeta1)
+                  
+p2_dat = list(N = N,
                   C = C,
                   x = x,
-                  #x_const = x_const,
                   y = y,
                   sex = sex,
-                  ewa = P1,
-                  sd_ewa = sdP1)
+                  alpha_w = Walpha2,
+                  beta_w  = Wbeta2,
+                  alpha_a = Aalpha2,
+                  beta_a  = Abeta2)
 ```
 
 ## Bayesian models
 
+* this is only non-informative models
+* need to change informative and hybrid
+
 ```{r}
+# p1_non <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+#     data = p1_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p1_non, file = "./Stan/fits/pattern1_non.rda")
+# 
 # p2_non <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
-#     data = p2_data,               # named list of data
+#   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+#     data = p2_dat,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p2_non, file = "./Stan/fits/pattern2_noninf_fit.rda")
-# 
-p1_non <- stan(
-  file = "./Stan/models/bn2mf_score_reg_int.stan",  # Stan program
-    data = p1_data,               # named list of data
-    chains = 4,                   # number of Markov chains
-    warmup = 1000,                # number of warmup iterations per chain
-    iter = 5000,                  # total number of iterations per chain
-    cores = 2)                    # number of cores
-# save(p1_non_const, file = "./Stan/fits/pattern1_noninf_fit_const.rda")
-# save(p1_non, file = "./Stan/fits/pattern1_noninf_fit.rda")
-# 
-# p2_inf <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp2.stan",  # Stan program
-#     data = p2_data,               # named list of data
-#     chains = 4,                   # number of Markov chains
-#     warmup = 1000,                # number of warmup iterations per chain
-#     iter = 5000,                  # total number of iterations per chain
-#     cores = 2)                    # number of cores
-# save(p2_inf, file = "./Stan/fits/pattern2_inf_fit.rda")
-# 
+# save(p2_non, file = "./Stan/fits/pattern2_non.rda")
+
 # p1_inf <- stan(
 #   file = "./Stan/models/bn2mf_score_reg_int_infp1.stan",  # Stan program
-#     data = p1_data,               # named list of data
+#     data = p1_dat,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p1_inf, file = "./Stan/fits/pattern1_inf_fit.rda")
-# 
-# p2_infpnonc <- stan(
-#   file = "./Stan/models/bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
-#     data = p2_data,               # named list of data
+# save(p1_inf, file = "./Stan/fits/pattern1_inform.rda")
+
+# p2_inf <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_infp2.stan",  # Stan program
+#     data = p2_dat,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p2_infpnonc, file = "./Stan/fits/pattern2_infp2nonc_fit.rda")
-# 
-# p1_infpnonc <- stan(
+# save(p2_inf, file = "./Stan/fits/pattern2_inform.rda")
+
+# p1_hybrid <- stan(
 #   file = "./Stan/models/bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
-#     data = p1_data,               # named list of data
+#     data = p1_dat,               # named list of data
 #     chains = 4,                   # number of Markov chains
 #     warmup = 1000,                # number of warmup iterations per chain
 #     iter = 5000,                  # total number of iterations per chain
 #     cores = 2)                    # number of cores
-# save(p1_infpnonc, file = "./Stan/fits/pattern1_infp1nonc_fit.rda")
+# save(p1_hybrid, file = "./Stan/fits/pattern1_hybrid.rda")
+
+# p2_hybrid <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
+#     data = p2_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p2_hybrid, file = "./Stan/fits/pattern2_hybrid.rda")
 ```
 
 ```{r, stan}
-load("./Stan/fits/pattern2_noninf_fit.rda")
-load("./Stan/fits/pattern2_inf_fit.rda")
-load("./Stan/fits/pattern1_noninf_fit.rda")
-load("./Stan/fits/pattern1_inf_fit.rda")
-load("./Stan/fits/pattern2_infp2nonc_fit.rda")
-load("./Stan/fits/pattern1_infp1nonc_fit.rda")
+load("./Stan/fits/pattern1_non.rda")
+load("./Stan/fits/pattern2_non.rda")
+
+load("./Stan/fits/pattern1_inform.rda")
+load("./Stan/fits/pattern2_inform.rda")
+
+load("./Stan/fits/pattern1_hybrid.rda")
+load("./Stan/fits/pattern2_hybrid.rda")
 ```
 
 ### Summary
@@ -320,13 +342,14 @@ print(p1_inf, params)
 
 ##### Informative Everything
 ```{r, p1inf3}
-print(p1_infpnonc, params)
+print(p1_hybrid, params)
 ```
 
 #### Pattern 2
 
 ##### Non-informative
 ```{r, p2non}
+params = names(p2_non)[grep("(alpha|beta)", names(p2_non))]
 print(p2_non, params)
 ```
 
@@ -337,141 +360,7 @@ print(p2_inf, params)
 
 ##### Informative Everything
 ```{r, p1inf1}
-print(p2_infpnonc, params)
-```
-
-### Posterior prediction
-
-#### Pattern 1
-
-##### Non-informative
-```{r, p1pppnon}
-y = bayes$WISC
-
-# Extract fit
-ext_p1 <- extract(p1_non)
-str(ext_p1)
-
-# WA = ext_p1$WA
-# dim(WA)
-# hist(WA[,4])
-
-y_pred_p1 = ext_p1$y_tilde
-
-# random sample of y
-samp = sample(1:16000, 75) # (5000-1000 warmup) * 4
-y_post_samp_p1 = y_pred_p1[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p1)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Pattern
-```{r, p1pppinf}
-# Extract fit
-ext_p1i <- extract(p1_inf)
-
-y_pred_p1i = ext_p1i$y_tilde
-
-# random sample of y
-y_post_samp_p1i = y_pred_p1i[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p1i)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Everything
-```{r, p1pppinf1}
-# Extract fit
-ext_p1inc <- extract(p1_infpnonc)
-
-y_pred_p1inc = ext_p1inc$y_tilde
-
-# random sample of y
-y_post_samp_p1inc = y_pred_p1inc[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p1inc)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-#### Pattern 2
-
-##### Non-informative
-```{r, p2pppnon}
-# Extract fit
-ext_p2 <- extract(p2_non)
-
-y_pred_p2 = ext_p2$y_tilde
-
-# random sample of y
-y_post_samp_p2 = y_pred_p2[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p2)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Pattern
-```{r, p2pppinf}
-# Extract fit
-ext_p2i <- extract(p2_inf)
-
-y_pred_p2i = ext_p2i$y_tilde
-
-# random sample of y
-y_post_samp_p2i = y_pred_p2i[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p2i)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
-```
-
-##### Informative Everything
-```{r, p2pppinf1}
-# Extract fit
-ext_p2inc <- extract(p2_infpnonc)
-
-y_pred_p2inc = ext_p2inc$y_tilde
-
-# random sample of y
-y_post_samp_p2inc = y_pred_p2inc[samp,]
-
-# plot posterior prediction
-color_scheme_set("brightblue")
-ppc_dens_overlay(y = as.vector(y),
-                 yrep = as.matrix(y_post_samp_p2inc)) +
-  labs(y = "Density",
-       title = "Posterior predicted distribution",
-       subtitle = "overlaid on measured density",
-       x = "Full Scale WISC")
+print(p2_hybrid, params)
 ```
 
 ### Coefficients of interest
@@ -510,7 +399,7 @@ mcmc_areas(p1_inf,
 ```{r, p1coefinf1}
 # Plot pattern beta coefficient with uncertainty
 color_scheme_set("brightblue")
-mcmc_areas(p1_infpnonc,
+mcmc_areas(p1_hybrid,
            pars = params[(length(params)-2):length(params)],
            prob = 0.95) + ggtitle("Posterior distributions",
                                   "with medians and 95% intervals") +
@@ -554,7 +443,7 @@ mcmc_areas(p2_inf,
 ```{r, p2coefinf1}
 # Plot pattern beta coefficient with uncertainty
 color_scheme_set("brightblue")
-mcmc_areas(p2_infpnonc,
+mcmc_areas(p2_hybrid,
            pars = params[(length(params)-2):length(params)],
            prob = 0.95) + ggtitle("Posterior distributions",
                                   "with medians and 95% intervals") +
@@ -580,7 +469,7 @@ add_ci4int_bayes(p1_inf)
 
 ##### Informative Everything
 ```{r, p1patinf1}
-add_ci4int_bayes(p1_infpnonc)
+add_ci4int_bayes(p1_hybrid)
 ```
 
 ##### All
@@ -589,7 +478,7 @@ add_ci4int_bayes(p1_infpnonc)
 add_ci4int_bayes(p1_non)[,1:2] %>% 
   rename(non_inf = mean) %>% 
   bind_cols(., inf_pat =add_ci4int_bayes(p1_inf)[,2]) %>% 
-  bind_cols(., inf_cov = add_ci4int_bayes(p1_infpnonc)[,2])
+  bind_cols(., inf_cov = add_ci4int_bayes(p1_hybrid)[,2])
 ```
 
 #### Pattern 2
@@ -606,7 +495,7 @@ add_ci4int_bayes(p2_inf)
 
 ##### Informative Everything
 ```{r, p2patinf1}
-add_ci4int_bayes(p2_infpnonc)
+add_ci4int_bayes(p2_hybrid)
 ```
 
 #### All
@@ -615,20 +504,20 @@ add_ci4int_bayes(p2_infpnonc)
 add_ci4int_bayes(p1_non)[,1:2] %>% 
   rename(non_inf = mean) %>% 
   bind_cols(., inf_pat =add_ci4int_bayes(p1_inf)[,2]) %>% 
-  bind_cols(., inf_ncov = add_ci4int_bayes(p1_infpnonc)[,2])
+  bind_cols(., inf_ncov = add_ci4int_bayes(p1_hybrid)[,2])
 
 add_ci4int_bayes(p2_non)[,1:2] %>% 
   rename(non_inf = mean) %>% 
   bind_cols(., inf_pat =add_ci4int_bayes(p2_inf)[,2]) %>% 
-  bind_cols(., inf_ncov = add_ci4int_bayes(p2_infpnonc)[,2])
+  bind_cols(., inf_ncov = add_ci4int_bayes(p2_hybrid)[,2])
 ```
 
 ```{r}
 bayesp1_i = add_ci4int_bayes(p1_inf)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
 bayesp2_i = add_ci4int_bayes(p2_inf)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
 
-bayesp1_h = add_ci4int_bayes(p1_infpnonc)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
-bayesp2_h = add_ci4int_bayes(p2_infpnonc)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
+bayesp1_h = add_ci4int_bayes(p1_hybrid)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
+bayesp2_h = add_ci4int_bayes(p2_hybrid)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
 
 tabbayes_i = bind_rows(bayesp1_i, bayesp2_i)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
             rename(term = beta, estimate = `50%`) %>% 
@@ -661,6 +550,7 @@ stargazer::stargazer(supp_table[,3:4], summary = F)
 
 ##### Non-informative
 ```{r}
+ext_p1 <- extract(p1_non)
 p1non_coef = cbind(ext_p1$beta_int, ext_p1$beta_sex, ext_p1$beta_p) %>% 
   as_tibble() %>% 
   rename(int=1, sex=2, p_male=3) %>% 
@@ -673,11 +563,12 @@ mcmc_areas(p1non_coef,
   scale_y_discrete(labels=c(
   "int" = "Interaction", 
   "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-10,10))
+  "p_female" = "P2 in females")) + xlim(c(-15,15))
 ```
 
 ##### Informative Pattern
 ```{r}
+ext_p1i = extract(p1_hybrid)
 p1i_coef = cbind(ext_p1i$beta_int, ext_p1i$beta_sex, ext_p1i$beta_p) %>% 
   as_tibble() %>% 
   rename(int=1, sex=2, p_male=3) %>% 
@@ -690,11 +581,12 @@ mcmc_areas(p1i_coef,
   scale_y_discrete(labels=c(
   "int" = "Interaction", 
   "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-10,10))
+  "p_female" = "P2 in females")) + xlim(c(-15,15))
 ```
 
 ##### Informative Everything
 ```{r}
+ext_p1inc = extract(p1_inf)
 p1i_coef_nc = cbind(ext_p1inc$beta_int, ext_p1inc$beta_sex, ext_p1inc$beta_p) %>% 
   as_tibble() %>% 
   rename(int=1, sex=2, p_male=3) %>% 
@@ -707,13 +599,14 @@ mcmc_areas(p1i_coef_nc,
   scale_y_discrete(labels=c(
   "int" = "Interaction", 
   "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-10,10))
+  "p_female" = "P2 in females")) + xlim(c(-15,15))
 ```
 
 #### Pattern 2
 
 ##### Non-informative
 ```{r}
+ext_p2 = extract(p2_non)
 p2non_coef = cbind(ext_p2$beta_int, ext_p2$beta_sex, ext_p2$beta_p) %>% 
   as_tibble() %>% 
   rename(int=1, sex=2, p_male=3) %>% 
@@ -731,6 +624,7 @@ mcmc_areas(p2non_coef,
 
 ##### Informative Pattern
 ```{r}
+ext_p2i = extract(p2_hybrid)
 p2i_coef = cbind(ext_p2i$beta_int, ext_p2i$beta_sex, ext_p2i$beta_p) %>% 
   as_tibble() %>% 
   rename(int=1, sex=2, p_male=3) %>% 
@@ -748,6 +642,7 @@ mcmc_areas(p2i_coef,
 
 ##### Informative Everything
 ```{r}
+ext_p2inc = extract(p2_inf)
 p2i_coef_nc = cbind(ext_p2inc$beta_int, ext_p2inc$beta_sex, ext_p2inc$beta_p) %>% 
   as_tibble() %>% 
   rename(int=1, sex=2, p_male=3) %>% 

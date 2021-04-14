@@ -113,7 +113,7 @@ add_ci4interaction <- function(fit, term1, term2) {
 add_ci4int_bayes = function(fit) {
 int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
 
-params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
+params = names(fit)[grep("(alpha|beta)", names(fit))]
 model_sum = summary(fit, params)$summary
 
 ext <- extract(fit)
@@ -210,6 +210,7 @@ reduced %>% slice(38)
 ols_plot_cooksd_chart(mod)
 ols_plot_resid_lev(mod)
 
+# get rid of highest
 mn_flip2 = mn_flip[-which.max(mn_flip$P1),]
 mod2 = lm(WISC ~ P1 + SEX*P1 + SEX + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
               MARITAL_STATUS + HOME_SCORE + mat_hard
@@ -223,19 +224,17 @@ ols_plot_resid_lev(mod2)
 
 whole[c(319, 307),]$P1
 whole[291,]
-sd(whole$P1)
 
 max(whole$P1) # 319
-max(whole_sub1$P1) # 307
 
-grubbs.test(log(whole$P1)) # highest values is an outlier
-grubbs.test(log(whole_sub1$P1))
+grubbs.test(log(mn_flip$P1)) # highest values is an outlier
+grubbs.test(log(mn_flip2$P1))
 ```
 
 ```{r}
 ewa_raw <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
 ewa_raw %>% 
-  summarise_all(quantile, probs = seq(0.25, 0.75, 0.25)) %>% bind_cols(probs = seq(0.25, 0.75, 0.25)) %>% t()
+  summarise_all(quantile, probs = seq(0.25, 0.75, 0.25)) %>% bind_cols(probs = seq(0.25, 0.75, 0.25), .)
 ```
 
 ## Demographics
@@ -535,10 +534,10 @@ summary(fit_p2a)
 tabp1 = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")[c(2,11:12),] %>% mutate(pattern = "Pattern 1")
 tabp2 = add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")[c(2,11:12),] %>% mutate(pattern = "Pattern 2")
 
-load("./Stan/fits/pattern1_noninf_fit.rda")
+load("./Stan/fits/pattern1_non.rda")
 bayesp1 = add_ci4int_bayes(p1_non)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
 
-load("./Stan/fits/pattern2_noninf_fit.rda")
+load("./Stan/fits/pattern2_non.rda")
 bayesp2 = add_ci4int_bayes(p2_non)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
 
 tabfreq = bind_rows(tabp1, tabp2)[,c(1:2, 6:8)] %>% mutate(model = "Traditional")
