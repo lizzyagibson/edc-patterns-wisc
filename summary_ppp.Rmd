@@ -273,10 +273,12 @@ demo %>% tbl_summary(by = Subsample, missing = "no",
                      add_p() %>% as_gt() %>% 
         tab_header(title = "Subject demographics and distribution of potential confounders, model covariates, and outcome variable")
 
-# demo %>% filter(Subsample == "Study Population") %>% 
-#          tbl_summary(missing = "no",
-#          statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% 
-#         as_kable_extra(., format = "latex")
+demo %>% filter(Subsample == "Study Population") %>%
+         tbl_summary(missing = "no", digits = list(all_continuous() ~ 1,
+                                                   all_categorical() ~ 1),
+         statistic = list(all_continuous() ~ "{mean} & {sd}",
+                          all_categorical() ~ "{n} & {p}")) %>%
+        as_kable_extra(., format = "latex")
 ```
 
 ## Distributions \& dectection
