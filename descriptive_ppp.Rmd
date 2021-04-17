@@ -48,18 +48,22 @@ options(
 ## Demographics
 
 ```{r}
-ppp_current = left_join(ppp_cov, mn_outcome) %>% mutate(Subsample = "Study Population") %>% rename(HOME_SCORE = HOMETOT)
+ppp_343 = left_join(ppp_cov, mn_outcome) %>% mutate(Subsample = "BN2MF Subsample") %>% rename(HOME_SCORE = HOMETOT)
+
+ppp_311 = ppp_343 %>% filter(!is.na(WISC)) %>% mutate(Subsample = "WISC Subsample")
+
+ppp_289 = ppp_311 %>% filter(!is.na(M_IQ) & !is.na(HOME_SCORE)) %>% mutate(Subsample = "Complete Cases")
 
 whole = mn_demo %>% 
         left_join(., mn_outcome, by = "SID") %>% 
         mutate(Subsample = "Entire Cohort") %>% 
         rename(HOME_SCORE = HOMETOT)
 
-demo =  bind_rows(ppp_current, whole) %>% 
+demo =  bind_rows(whole, ppp_343, ppp_311, ppp_289) %>% 
         mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
-        dplyr::select(-SID) %>% 
+        dplyr::select(ETH, M_AGE, M_EDU, M_IQ, HOME_SCORE, mat_hard, MARITAL_STATUS, ALCOHOL, SMOKER_IN_HOME, 
+                      SEX, WISC, Subsample) %>% 
         rename(Ethnicity = ETH,
-               `Gestational age` = GEST,
                `Maternal education` = M_EDU,
                `Marital status` = MARITAL_STATUS,
                `Child sex` = SEX,
@@ -68,16 +72,22 @@ demo =  bind_rows(ppp_current, whole) %>%
                `Maternal age at delivery` = M_AGE,
                `Prenatal alcohol consumption` = ALCOHOL,
                `Smoker in home` = SMOKER_IN_HOME,
-               `WISC FS` = WISC,
-               `WISC VCI` = WISC_VC,
-               `WISC PRI` = WISC_PR)
+               `Material hardship` = mat_hard,
+               `Child Full Scale IQ` = WISC) %>% 
+        mutate(Subsample = fct_inorder(Subsample))
 
-demo %>% tbl_summary(by = Subsample,
+demo %>% 
+  filter(Subsample %in% c("Entire Cohort", "Complete Cases")) %>% 
+  tbl_summary(by = Subsample, missing = "no", 
                      statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% add_p() 
 
-# demo %>% tbl_summary(by = Subsample,
-#          statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% add_p()  %>%
-#          as_hux_table() %>% huxtable::to_latex()
+demo %>%
+         tbl_summary(by = Subsample,
+           missing = "no", digits = list(all_continuous() ~ 1,
+                                         all_categorical() ~ 1),
+         statistic = list(all_continuous() ~ "{mean} & {sd}",
+                          all_categorical() ~ "{n} & {p}")) %>% add_p() %>%
+         as_kable_extra(., format = "latex")
 ```
 
 ## Distributions \& Dectection
