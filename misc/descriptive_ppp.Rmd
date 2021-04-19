@@ -12,154 +12,14 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center')
-options(scipen = 999)
-library(haven)
-library(tidyverse)
-library(janitor)
-library(reshape2)
-library(broom)
-library(tableone)
-library(xtable)
-library(GGally)
-library(gtsummary)
-library(huxtable)
-library(rcompanion)
-library(R.matlab)
-library(MNdata) # Local package
-library(ggsci)
 
-theme_set(theme_bw(base_size = 20) + 
-            theme(strip.background = element_rect(fill="white"),
-                  axis.text.x = element_text(angle = 45, hjust = 1, size = 20),
-                  legend.title = element_blank(),
-                  legend.position = "bottom"))
-
-options(
-  ggplot2.discrete.color = pal_nejm()(8),
-  ggplot2.discrete.fill = pal_nejm()(8))
-```
-
-## M&N Data
-
-* 5 phenols  
-* 3 parabens  
-* 9 phthalates  
-
-## Demographics
-
-```{r}
-ppp_343 = left_join(ppp_cov, mn_outcome) %>% mutate(Subsample = "BN2MF Subsample") %>% rename(HOME_SCORE = HOMETOT)
-
-ppp_311 = ppp_343 %>% filter(!is.na(WISC)) %>% mutate(Subsample = "WISC Subsample")
-
-ppp_289 = ppp_311 %>% filter(!is.na(M_IQ) & !is.na(HOME_SCORE)) %>% mutate(Subsample = "Complete Cases")
-
-whole = mn_demo %>% 
-        left_join(., mn_outcome, by = "SID") %>% 
-        mutate(Subsample = "Entire Cohort") %>% 
-        rename(HOME_SCORE = HOMETOT)
-
-demo =  bind_rows(whole, ppp_343, ppp_311, ppp_289) %>% 
-        mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
-        dplyr::select(ETH, M_AGE, M_EDU, M_IQ, HOME_SCORE, mat_hard, MARITAL_STATUS, ALCOHOL, SMOKER_IN_HOME, 
-                      SEX, WISC, Subsample) %>% 
-        rename(Ethnicity = ETH,
-               `Maternal education` = M_EDU,
-               `Marital status` = MARITAL_STATUS,
-               `Child sex` = SEX,
-               `HOME scale` = HOME_SCORE,
-               `Maternal IQ` = M_IQ,
-               `Maternal age at delivery` = M_AGE,
-               `Prenatal alcohol consumption` = ALCOHOL,
-               `Smoker in home` = SMOKER_IN_HOME,
-               `Material hardship` = mat_hard,
-               `Child Full Scale IQ` = WISC) %>% 
-        mutate(Subsample = fct_inorder(Subsample))
-
-demo %>% 
-  filter(Subsample %in% c("Entire Cohort", "Complete Cases")) %>% 
-  tbl_summary(by = Subsample, missing = "no", 
-                     statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% add_p() 
-
-demo %>%
-         tbl_summary(by = Subsample,
-           missing = "no", digits = list(all_continuous() ~ 1,
-                                         all_categorical() ~ 1),
-         statistic = list(all_continuous() ~ "{mean} & {sd}",
-                          all_categorical() ~ "{n} & {p}")) %>% add_p() %>%
-         as_kable_extra(., format = "latex")
-```
-
-## Distributions \& Dectection
-
-```{r}
-lod <- mn_phenol %>% drop_na(BP_3:BPA) %>% 
-          rename(B_PB_detect = B_PB_LOD_0_2, TCS_detect = TCS_LOD_2_3, 
-                DCP_24_detect = X24_DCP_LOD_0_2, BP_3_detect = BP_3_LOD_0_4) %>%   
-          mutate_at(vars(10:13), ~ifelse(is.na(.), 0, 1)) %>% 
-          inner_join(., mn_pht, by = "SID") %>% 
-  dplyr::select(grep("detect", colnames(.))) %>%
-  gather(chem, level) %>% 
-  mutate(level = ifelse(level > 1, 0, level)) %>% 
-  group_by(chem, level) %>% 
-  summarize(n = n()) %>% 
-  spread(level, n) %>% 
-  mutate_all(~replace_na(., 0))
-# Number of obs with each flag for each pht
-# 14 bc 3 detected 100%
-
-detected <- lod %>% 
-  mutate(Prop_Detected = `0`/(`1` + `0`),
-         `% <LOD` = 1 - Prop_Detected) %>%
-  ungroup() %>% 
-  dplyr::select(Chemical = chem, `% <LOD`) %>% 
-  mutate(Chemical = str_remove(Chemical, "_detect")) %>% 
-  rbind(., tibble(Chemical = "M_PB",   `% <LOD` = 0)) %>% 
-  rbind(., tibble(Chemical = "P_PB",   `% <LOD` = 0)) %>% 
-  rbind(., tibble(Chemical = "DCP_25", `% <LOD` = 0))
-
-conc = mn_ppp %>% 
-  pivot_longer(MEHHP:BPA,
-               names_to = "Chemical") %>% 
-  group_by(Chemical) %>% 
-  summarise(Mean = mean(value, na.rm = TRUE),
-            Stdev = sd(value, na.rm = TRUE),
-            Min = min(value, na.rm = TRUE),
-            qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),
-            Max = max(value, na.rm = TRUE)) %>% 
-  pivot_wider(names_from = "prob",
-              values_from = "qs") %>% 
-  dplyr::select(Chemical:Min, Q25:Q75, Max)
-
-ppp_table <- left_join(detected, conc, by = c("Chemical")) %>%
-  mutate_if(is.numeric, round, digits = 2)
-
-ppp_table  %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
-
-#xtable(pht_conc)
-```
-
-### Chemicals
-
-```{r, fig1, fig.height=10, fig.width=12}
-mn_ppp %>% 
-  pivot_longer(MEHHP:BPA) %>% 
-  mutate(name = str_replace(name, "_", "-")) %>% 
-  ggplot(aes(x = value)) +
-  geom_histogram(aes(y = ..density..), alpha=0.65, fill = "#0072B5") +
-  facet_wrap(name~., scales = "free") + 
-  labs(y = "Density", x="") +
-  theme(axis.text.y = element_blank(),
-        text = element_text(size = 30),
-        axis.text.x = element_text(size = 10),
-        axis.title.y = element_text(size = 35))
+source("./packages.R")
+source("./read_data.R")
 ```
 
 ### Patterns
 
 ```{r, fig22}
-ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P2 = V1, P1 = V2)
-
 ewa %>% 
   pivot_longer(P1:P2) %>% 
   ggplot(aes(x = value)) +
@@ -187,22 +47,6 @@ bind_cols(ppp_current, ewa) %>%
 ## Correlation
 
 ```{r, fig.height=7, fig.width=7}
-# Get lower triangle of the correlation matrix
-get_lower_tri <-function(x){
-  x[upper.tri(x)] <- NA
-  
-  for (i in 1:nrow(x)) {
-    for (j in 1:ncol(x)) {
-      if (j == i) {x[i,j] <- NA}
-    }
-  }
-  
-  return(x)
-}
-
-round(cor(mn_ppp[,-1], use = "complete.obs", 
-                                  method = c("spearman")),2)
-
 cormat <- get_lower_tri(round(cor(mn_ppp[,-1], use = "complete.obs", 
                                   method = c("spearman")),2))[2:17, 1:16]
 
@@ -241,11 +85,6 @@ melted_cormat %>%
 ## Loadings
 
 ```{r}
-eh <- readMat(here::here("./Data/mn2_EH.mat"))[[1]]
-# ["MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA"];
-
-colnames(eh) <- c("MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA")
-
 applied <- eh %>% 
   as_tibble() %>% 
   mutate(Pattern = 1:2) %>% 

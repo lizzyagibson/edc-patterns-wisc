@@ -1,19 +1,9 @@
-library(mgcv)
+source("./packages.R")
+source("./read_data.R")
 
 pal = brewer.pal(11, "RdBu")[c(2,4,11,10)]
 
 # DATA ####
-ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
-whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
-
-whole_cc = whole %>% dplyr::select(SID, WISC, P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE, mat_hard,
-                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
-  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), ~scale(.)[,1]) %>% 
-  mutate(SEX = as_factor(str_c(SEX, "s")))
-
-mn = whole_cc %>% filter(P1 < mean(P1) + 5.5*sd(P1))
-mn_flip = mn %>% mutate(SEX = fct_rev(SEX))
-
 summary(mn$P1)
 summary(whole_cc$P1)
 
@@ -24,7 +14,6 @@ fit_sense <- gam(WISC ~ s(P1, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU +
 summary(fit_sense)
 
 pred = as.data.frame(predict.gam(fit_sense, se.fit = T, type="terms"))
-as_tibble(pred)
 
 const = tibble(P1 = seq(min(whole_cc$P1), max(whole_cc$P1), length=289)) %>% 
   mutate(SEX = "Females",
@@ -101,11 +90,12 @@ as_tibble(pred_flip)
 
 # Combine predicted outcomes with data
 main = 
-  mn %>%
+  mn_subset %>%
   bind_cols(., pred_main) %>% 
   bind_cols(., flip.se = (pred_flip$se.fit.P1 + pred_flip$se.fit.P1.SEX)) %>% # just get se for female
   dplyr::select(SID, WISC, grep("(SEX|P)", names(.)), flip.se) %>% 
-  mutate(predIQ = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, # ifelse(SEX == "Female", predIQf, predIQm),
+  mutate(SEX = str_c(SEX, "s"),
+         predIQ = fit.P1 + mean(WISC) + fit.SEX + fit.P1.SEX, # ifelse(SEX == "Female", predIQf, predIQm),
          se.male = se.fit.P1 + se.fit.P1.SEX,
          se.female = flip.se,
          se = ifelse(SEX == "Females", se.female, se.male),
@@ -133,6 +123,7 @@ main %>%
 # Final plot ####
 sense_plot = bind_rows(sense_all, main)
 
+# Figure S1
 #pdf("./Figures/sense_plot.pdf")
 sense_plot %>% 
   ggplot(aes(x = P1, group = model, fill = model)) +
@@ -153,3 +144,40 @@ sense_plot %>%
   theme(legend.title = element_blank(),
         legend.text = element_text(size = 15)) + scale_fill_nejm() + scale_color_nejm()
 #dev.off()
+
+# Missingness
+par(mfrow=c(1,1))
+
+model_dat = whole %>% 
+  filter(!is.na(WISC)) %>% 
+  dplyr::select(-c(SID, GEST, WISC_VC, WISC_PR, WISC_PS, WISC_WM, P2))
+
+model_dat %>% drop_na()
+model_dat %>% names()
+
+model_dat %>% ff_glimpse()
+
+mice::md.pattern(model_dat, rotate.names = T)
+# 289 complete samples
+# 14 missing only home score
+# 6 missing only maternal iq
+# 2 missing both
+
+aggr(model_dat, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, 
+     labels=names(model_dat), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+
+marginplot(model_dat[c(6,9)])
+
+explanatory = c("ETH","M_EDU","MARITAL_STATUS","SMOKER_IN_HOME","SEX","HOME_SCORE",
+                "ALCOHOL","M_AGE","mat_hard","WISC","P1")
+
+model_m = model_dat %>% 
+  mutate(home_miss = as_factor(ifelse(is.na(HOME_SCORE), 1, 0)),
+         iq_miss = as_factor(ifelse(is.na(M_IQ), 1, 0)))
+
+model_m %>% missing_compare(., dependent = "M_IQ", explanatory)
+
+explanatory = c("ETH","M_EDU","MARITAL_STATUS","SMOKER_IN_HOME","SEX","M_IQ",
+                "ALCOHOL","M_AGE","mat_hard","WISC","P1")
+
+model_m %>% missing_compare(., dependent = "HOME_SCORE", explanatory) 

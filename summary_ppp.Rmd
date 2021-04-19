@@ -10,165 +10,10 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center', echo=FALSE)
-options(scipen = 999)
-library(haven)
-library(olsrr)
-library(mvoutlier)
-library(outliers)
-library(tidyverse)
-library(RColorBrewer)
-library(mgcv)
-library(EnvStats)
-library(janitor)
-library(gt)
-library(reshape2)
-library(broom)
-library(tableone)
-library(xtable)
-library(GGally)
-library(gtsummary)
-library(huxtable)
-library(rcompanion)
-library(R.matlab)
-library(MNdata) # Local package
-library(ggsci)
-library(patchwork)
-library(rstan)
-library(bayesplot)
-library(shinystan)
-library(rstanarm)
-library(tictoc)
-library(recipes)
-library(EnvStats)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center')
 
-theme_set(theme_bw(base_size = 20) + 
-            theme(strip.background = element_rect(fill="white"),
-                  axis.text.x = element_text(angle = 45, hjust = 1),
-                  legend.title = element_text(size = 12),
-                  legend.position = "bottom", 
-                  legend.text = element_text(size = 7)))
-
-options(
-  ggplot2.discrete.color = pal_nejm()(8),
-  ggplot2.discrete.fill = pal_nejm()(8))
-```
-
-```{r, functions}
-# Get lower triangle of the correlation matrix
-get_lower_tri<-function(x){
-  x[upper.tri(x)] <- NA
-  
-  for (i in 1:nrow(x)) {
-    for (j in 1:ncol(x)) {
-      if (j == i) {x[i,j] <- NA}
-    }
-  }
-  
-  return(x)
-}
-
-tidy_ci = function(fit) {
-              tidy(fit) %>% bind_cols(., as_tibble(confint(fit)))
-}
-
-add_ci4interaction <- function(fit, term1, term2) {
-    # CONFIDENCE INTERVAL for pattern in females
-    # Compute association and its uncertainty 
-    
-    # here we create tables of coefficients and covariance
-    coef.mat <- summary(fit)$coefficients
-    var.mat  <- vcov(fit)
-    
-    # the total term for the association is the 
-    # sum of P2 in the reference sex plus the term for P2:female
-    beta.Pf <- coef.mat[term1,1] + coef.mat[term2,1]
-    
-    # Compute variance in order to compute standard error
-    # We must compute the variance for the total term 
-    # Var(Beta1 + Beta2) = Var(Beta1) + Var(Beta2) + 2*CoVar(Beta1, Beta2) 
-    var.Pf <- var.mat[term1, term1] + 
-              var.mat[term2, term2] +
-              2*var.mat[term1, term2]
-    
-    # this is st error NOT std
-    ste.Pf  <-  sqrt(abs(var.Pf))
-
-    # compute confidence intervals 
-    lci.Pf <- beta.Pf - 1.96*ste.Pf
-    uci.Pf <- beta.Pf + 1.96*ste.Pf
-    
-    # 2 calculate the test statistic: t = Est/SE
-    # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
-    test_stat = abs(beta.Pf/ste.Pf)
-    pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
-    pvalue
-    
-    tidy_ci(fit) %>% 
-      bind_rows(., tibble(term = paste0(term1, " in females"), estimate = beta.Pf, std.error = ste.Pf,
-                statistic = test_stat, p.value = pvalue, `2.5 %` = lci.Pf, `97.5 %` = uci.Pf)) %>% 
-      mutate(term = ifelse(term == term1, paste(term1, "in males"), term))
-}
-
-add_ci4int_bayes = function(fit) {
-int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
-
-params = names(fit)[grep("(alpha|beta)", names(fit))]
-model_sum = summary(fit, params)$summary
-
-ext <- extract(fit)
-
-post_coef = cbind(ext$alpha, ext$beta_c, 
-                     ext$beta_int, ext$beta_sex, ext$beta_p) %>% as_tibble()
-
-colnames(post_coef) = params
-int_coefs = post_coef %>% dplyr::select(beta_p, beta_int)
-
-coef1 = int_coefs$beta_p
-coef2 = int_coefs$beta_int
-
-covmat = cov(int_coefs)
-beta_f = coef1 + coef2
-
-var_f = covmat[1, 1] + 
-              covmat[2, 2] +
-              2*covmat[1, 2]
-
-# this is std dev not std error
-sd_f  <- sqrt(abs(var_f))
-
-# take min sample size as conservative est.
-sampsize = min(int_sum[1,9], int_sum[3,9])
-
-# this is std error
-se_f  <- sd_f/sqrt(sampsize)
-
-lci.f <- mean(beta_f) - 1.96*se_f
-uci.f <- mean(beta_f) + 1.96*se_f
-
-# 2 calculate the test statistic: t = Est/SE
-# 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
-# test_stat = abs(mean(beta_f)/se_f)
-# pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
-# NO BAYESIAN PVALUE
-
-q = quantile(beta_f, probs = c(0.025, .25, .50, .75, .975)) %>% as.data.frame() %>% 
-  rownames_to_column() %>% 
-  pivot_wider(names_from = "rowname",
-              values_from = ".")
-
-new_var = tibble(beta = "p in females", mean = round(mean(beta_f), 4), 
-                 se_mean = round(se_f,4), sd = round(sd_f,4)) %>% 
-          bind_cols(., q)
-
-# M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
-as.data.frame(model_sum)[,-c(9:10)] %>% 
-  rownames_to_column(var="beta") %>% 
-  mutate(beta = c("alpha", "age", "edu", "marital", "home", "iq", "alcohol", "mat_hard",
-                  "sex*p", "sex", "p in males")) %>% 
-  bind_rows(.,new_var) %>% 
-  mutate_at(vars(2:9), round, 2)
-}
+source("./packages.R")
+source("./read_data.R")
 ```
 
 ## Mothers & Newborns
@@ -177,44 +22,24 @@ as.data.frame(model_sum)[,-c(9:10)] %>%
 * 3 parabens  
 * 9 phthalates  
 
-```{r, read,}
-ewa <- readMat(here::here("./Data/mn2_EWA_sd1.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
-whole = bind_cols(ppp_cov, ewa) %>% left_join(., mn_outcome) %>% rename(HOME_SCORE = HOMETOT)
-
-mn = whole %>% 
-  filter(P1 != max(P1)) %>%
-  filter(P1 != max(P1)) %>% 
-  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale)
-```
-
 ### Outliers
 
 ```{r}
-mn_flip = whole %>% mutate(SEX = fct_rev(SEX)) %>%
-  dplyr::select(WISC,P1,SEX,M_IQ,ALCOHOL,M_EDU,M_AGE,MARITAL_STATUS,HOME_SCORE,mat_hard) %>% 
-  drop_na()
 mod = lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
               MARITAL_STATUS + HOME_SCORE + mat_hard
-             , data = mn_flip)
+             , data = whole)
 summary(mod)
 plot(mod)
-
-reduced = mn_flip %>% select(WISC,P1,SEX,M_IQ,ALCOHOL,M_EDU,M_AGE,MARITAL_STATUS,HOME_SCORE,mat_hard) %>% 
-  drop_na() %>% mutate(id = 1:nrow(.))
-
-reduced %>% slice(274)
-reduced %>% slice(264)
-reduced %>% slice(38)
 
 # 274 influential based on Cooks distance, residual vs. leverage plot
 ols_plot_cooksd_chart(mod)
 ols_plot_resid_lev(mod)
 
 # get rid of highest
-mn_flip2 = mn_flip[-which.max(mn_flip$P1),]
+whole_m1 = whole[-which.max(whole$P1),]
 mod2 = lm(WISC ~ P1 + SEX*P1 + SEX + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
               MARITAL_STATUS + HOME_SCORE + mat_hard
-             , data = mn_flip2)
+             , data = whole_m1)
 summary(mod2)
 plot(mod2)
 
@@ -222,36 +47,29 @@ plot(mod2)
 ols_plot_cooksd_chart(mod2)
 ols_plot_resid_lev(mod2)
 
-whole[c(319, 307),]$P1
-whole[291,]
+whole[c(319, 307),]
 
 max(whole$P1) # 319
 
-grubbs.test(log(mn_flip$P1)) # highest values is an outlier
-grubbs.test(log(mn_flip2$P1))
-```
-
-```{r}
-ewa_raw <- readMat(here::here("./Data/mn2_EWA.mat"))[[1]] %>% as_tibble() %>% rename(P1 = V1, P2 = V2)
-ewa_raw %>% 
-  summarise_all(quantile, probs = seq(0.25, 0.75, 0.25)) %>% bind_cols(probs = seq(0.25, 0.75, 0.25), .)
+grubbs.test(log(whole$P1)) # highest values is an outlier
+grubbs.test(log(whole_m1$P1))
 ```
 
 ## Demographics
 
 ```{r, demo}
-ppp_343 = ppp_cov %>% mutate(Subsample = "Study Population") %>% rename(HOME_SCORE = HOMETOT)
-# 343 with pht/phenol exposure
-ppp_current = ppp_343 %>% filter(!is.na(WISC))
-# 311 with WISC
+ppp_343 = left_join(ppp_cov, mn_outcome) %>% mutate(Subsample = "BN2MF Subsample") %>% rename(HOME_SCORE = HOMETOT)
+
+ppp_311 = ppp_343 %>% filter(!is.na(WISC)) %>% mutate(Subsample = "WISC Subsample")
+
+ppp_289 = ppp_311 %>% filter(!is.na(M_IQ) & !is.na(HOME_SCORE)) %>% mutate(Subsample = "Complete Cases")
 
 cohort = mn_demo %>% 
         left_join(., mn_outcome, by = "SID") %>% 
-        dplyr::select(-c(WISC_VC, WISC_PR, WISC_PS, WISC_WM)) %>% 
         mutate(Subsample = "Entire Cohort") %>% 
         rename(HOME_SCORE = HOMETOT)
 
-demo =  bind_rows(ppp_current, cohort) %>% 
+demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %>% 
         mutate_at(vars(SMOKER_IN_HOME, SEX, ALCOHOL), as_factor) %>% 
         dplyr::select(ETH, M_AGE, M_EDU, M_IQ, HOME_SCORE, mat_hard, MARITAL_STATUS, ALCOHOL, SMOKER_IN_HOME, 
                       SEX, WISC, Subsample) %>% 
@@ -267,27 +85,52 @@ demo =  bind_rows(ppp_current, cohort) %>%
                `Material hardship` = mat_hard,
                `Child Full Scale IQ` = WISC) %>% 
         mutate(Subsample = fct_inorder(Subsample))
+```
 
-demo %>% tbl_summary(by = Subsample, missing = "no",
-                     statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% 
-                     add_p() %>% as_gt() %>% 
+## Table 1
+
+```{r one}
+demo %>%  
+  filter(Subsample == "BN2MF Subsample") %>% 
+  tbl_summary(missing = "no",
+              statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% 
+              as_gt() %>% 
         tab_header(title = "Subject demographics and distribution of potential confounders, model covariates, and outcome variable")
 
-demo %>% filter(Subsample == "Study Population") %>%
-         tbl_summary(missing = "no", digits = list(all_continuous() ~ 1,
-                                                   all_categorical() ~ 1),
-         statistic = list(all_continuous() ~ "{mean} & {sd}",
-                          all_categorical() ~ "{n} & {p}")) %>%
-        as_kable_extra(., format = "latex")
+# demo %>% filter(Subsample == "Study Population") %>%
+#          tbl_summary(missing = "no", digits = list(all_continuous() ~ 1,
+#                                                    all_categorical() ~ 1),
+#          statistic = list(all_continuous() ~ "{mean} & {sd}",
+#                           all_categorical() ~ "{n} & {p}")) %>%
+#         as_kable_extra(., format = "latex")
+# ^ print to latex
+```
+
+### Supplemental table 1
+```{r}
+demo %>% 
+  tbl_summary(by = Subsample, missing = "no", 
+                     statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% add_p() 
+
+# demo %>%
+#          tbl_summary(by = Subsample,
+#            missing = "no", digits = list(all_continuous() ~ 1,
+#                                          all_categorical() ~ 1),
+#          statistic = list(all_continuous() ~ "{mean} & {sd}",
+#                           all_categorical() ~ "{n} & {p}")) %>% add_p() %>%
+#          as_kable_extra(., format = "latex")
+
+# ^^ supplemental table 
 ```
 
 ## Distributions \& dectection
 
 ```{r, lod}
+# mn_phenol and mn_pht are datasets I have stored internally in a package
 lod <- mn_phenol %>% drop_na(BP_3:BPA) %>% 
           rename(B_PB_detect = B_PB_LOD_0_2, TCS_detect = TCS_LOD_2_3, 
                 DCP_24_detect = X24_DCP_LOD_0_2, BP_3_detect = BP_3_LOD_0_4) %>%   
-          mutate_at(vars(10:13), ~ifelse(is.na(.), 0, 1)) %>% 
+          mutate_at(vars(10:13), ~ifelse(is.na(.), 0, 1)) %>% # 1 if detected, 0 otherwise
           inner_join(., mn_pht, by = "SID") %>% 
   dplyr::select(grep("detect", colnames(.))) %>%
   gather(chem, level) %>% 
@@ -305,11 +148,11 @@ detected <- lod %>%
   ungroup() %>% 
   dplyr::select(Chemical = chem, `% <LOD`) %>% 
   mutate(Chemical = str_remove(Chemical, "_detect")) %>% 
-  rbind(., tibble(Chemical = "M_PB",   `% <LOD` = 0)) %>% 
+  rbind(., tibble(Chemical = "M_PB",   `% <LOD` = 0)) %>% # add the three detected 100% 
   rbind(., tibble(Chemical = "P_PB",   `% <LOD` = 0)) %>% 
   rbind(., tibble(Chemical = "DCP_25", `% <LOD` = 0))
 
-conc = mn_ppp %>% 
+conc = mn_ppp %>% # get summary stats for concentrations
   pivot_longer(MEHHP:BPA,
                names_to = "Chemical") %>% 
   group_by(Chemical) %>% 
@@ -322,21 +165,27 @@ conc = mn_ppp %>%
               values_from = "qs") %>% 
   dplyr::select(Chemical:Min, Q25:Q75, Max)
 
-ppp_table <- left_join(detected, conc, by = c("Chemical")) %>%
+ppp_table <- left_join(detected, conc, by = c("Chemical")) %>% # combine concentrations and detection into table
   mutate_if(is.numeric, round, digits = 2) %>% 
   mutate(group = case_when(Chemical == "M_PB" ~ "phenols",
                            grepl("^M", Chemical) ~ "phthalates",
                            TRUE ~ "phenols")) %>% 
   arrange(group, Chemical) %>% 
   dplyr::select(-group)
+```
 
-ppp_table  
+## Table 2
+```{r}
+ppp_table %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
 
-# %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during # the third trimester of pregnancy (n = 343)")
-
-# ppp_table %>% 
-#   dplyr::select(1:2, 6:8) %>% 
+# ppp_table %>%
+#   dplyr::select(1:2, 6:8) %>%
 #   stargazer::stargazer(summary = F)
+# ^ print to latex
+
+ewa_raw %>% 
+  summarise_all(quantile, probs = seq(0.25, 0.75, 0.25)) %>% bind_cols(probs = seq(0.25, 0.75, 0.25), .)
+# added this to table
 ```
 
 ### Chemicals
@@ -361,31 +210,43 @@ cormat <- get_lower_tri(round(cor(mn_ppp[,-1], use = "complete.obs",
 
 melted_cormat <- melt(cormat) %>% 
   rename(Correlation = value) %>% 
-  mutate(Var1 = str_replace(Var1, "_", "-"),
-    Var1 = fct_inorder(Var1),
-    Var2 = str_replace(Var2, "_", "-"),
-    Var2 = fct_inorder(Var2))
+  mutate(Var1 = case_when(Var1 == "DCP_24" ~ "24-DCP",
+                          Var1 == "DCP_25" ~ "25-DCP",
+                          Var1 == "BP_3" ~ "BP-3",
+                          TRUE ~ as.character(Var1)),
+         Var2 = case_when(Var2 == "DCP_24" ~ "24-DCP",
+                          Var2 == "DCP_25" ~ "25-DCP",
+                          Var2 == "BP_3" ~ "BP-3",
+                          TRUE ~ as.character(Var2)),
+    Var1 = fct_inorder(str_remove(Var1, "_")),
+    Var2 = fct_inorder(str_remove(Var2, "_"))) %>% as_tibble()
+```
 
-ggplot(data = melted_cormat, aes(x = Var1, y = Var2)) + 
-  geom_tile(aes(fill = Correlation), color = "white") + 
+## Figure 1a
+```{r}
+#pdf("./Figures/ppp_corr.pdf")
+melted_cormat %>% 
+  mutate(Var1 = fct_rev(Var1)) %>% 
+  ggplot(aes(x = Var2, y = Var1)) + 
+  geom_tile(aes(fill = Correlation), color = "black", size=0.25) + 
   scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00",
-                       na.value = "grey80") +
-  labs(x = "", y = "", title = "") +
+                       na.value = "grey90") +
+  #scale_fill_distiller(palette="RdYlBu",
+  #                     na.value = "grey90") +
+  labs(x = "", y = "", title = "") + 
   theme_test(base_size = 20) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.major = element_blank(),
         legend.text = element_text(size = 8),
+        legend.title = element_text(size = 15),
         legend.position = "bottom")
+#dev.off()
 ```
 
 ## Exposure patterns
 
 ### Loadings
 ```{r, load-load}
-eh <- readMat(here::here("./Data/mn2_EH.mat"))[[1]]
-# ["MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA"];
-
-colnames(eh) <- c("MEHHP", "MECPP", "MEOHP", "MEHP", "MCPP", "MIBP", "MBP", "MBZP", "MEP", "BP_3", "B_PB", "M_PB", "P_PB", "TCS", "DCP_24", "DCP_25", "BPA")
-
 applied <- eh %>% 
   as_tibble() %>% 
   mutate(Pattern = 1:2) %>% 
@@ -396,51 +257,28 @@ applied <- eh %>%
          Chemicals = str_replace(Chemicals, "_", "-")) %>% 
   mutate(Pattern = paste0("Pattern ", Pattern),
          Chemicals = fct_inorder(Chemicals))
+```
 
-eh_plot = 
-  ggplot(data = applied, aes(x = Pattern, y = Chemicals)) + 
-  geom_tile(aes(fill = Loadings), color = "white") + 
+## Figure 1b
+```{r}
+#pdf("./Figures/eh_loadings.pdf", width = 2.5)
+applied %>% 
+  mutate(Chemicals = fct_rev(Chemicals)) %>% 
+  ggplot(aes(x = Pattern, y = Chemicals)) + 
+  geom_tile(aes(fill = Loadings), color = "black", size=.25) + 
   scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00") +
   labs(x = "", y = "", title = "") + 
-  theme_minimal(base_size = 20) +
+  theme_test(base_size = 20) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.text = element_text(size = 10),
-        legend.title = element_text(size = 12),
-        legend.position = "bottom",
-        panel.grid.major = element_blank())
-```
-
-```{r, load-cor, cache=TRUE}
-chem_pat = bind_cols(mn_ppp, ewa) %>% dplyr::select(-SID) %>% as.matrix()
-
-cormat_p <- get_lower_tri(round(cor(chem_pat, use = "complete.obs", 
-                                  method = c("spearman")),2))[18:19,]
-
-melted_cormat_p <- melt(cormat_p) %>% 
-  rename(Correlation = value) %>% 
-  mutate(Var1 = str_replace(Var1, "_", "-"),
-    Var1 = fct_inorder(Var1),
-    Var2 = str_replace(Var2, "_", "-"),
-    Var2 = fct_inorder(Var2)) %>% 
-  filter(!(Var2 %in% c("P2","P1"))) %>% 
-  mutate(Var1 = case_when(Var1 == "P1" ~ "Pattern 1",
-                          Var1 == "P2" ~ "Pattern 2"))
-
-corr_plot = 
-  ggplot(data = melted_cormat_p, aes(x = Var1, y = Var2)) + 
-  geom_tile(aes(fill = Correlation), color = "white") + 
-  scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00", limits = c(-1,1)) +
-  labs(x = "", y = "", title = "") +
-  theme_minimal(base_size = 20) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 10),
-        legend.title = element_text(size = 12),
-        legend.position = "bottom",
-        panel.grid.major = element_blank())
-```
-
-```{r, fig.height=8}
-eh_plot + corr_plot
+        legend.title = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        legend.direction = "horizontal",
+        legend.position = c(0, -0.275), # c(1,0) right bottom, c(1,1) right top.
+        legend.background = element_rect(fill = "#ffffffaa", colour = NA),
+        #legend.key.size = unit(0.85, "lines"),
+        plot.margin = margin(0,1,1,0, "cm"))
+#dev.off()
 ```
 
 ### Distributions
@@ -462,32 +300,7 @@ bind_cols(ppp_343, ewa) %>%
   labs(y = "Density", x="")
 ```
 
-### Sources
-
-```{r, sources, cache=TRUE, fig.width = 4, fig.height=8}
-load("./pattern_source_heat_data.rda")
-
-ggplot(data = heat_gg, aes(x = pattern, y = product)) + 
-  geom_tile(aes(fill = beta)) + 
-  #scale_fill_distiller(palette = "RdBu")
-  scale_fill_gradient2(low = "#046C9A", mid = "beige", high = "#F21A00") +
-  geom_text(aes(label = sig), size = 10, color = "white", vjust = .8) +
-  labs(x = "", y = "", fill = "Coefficient") + 
-  theme_minimal(base_size = 20) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 12),
-        legend.position = "bottom",
-        panel.grid.major = element_blank())
-```
-
 ## Health models
-
-```{r}
-par(mfrow=c(1,2))
-summary(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn))
-plot(gam(WISC ~ s(P2, by = SEX) + SEX, data = mn)) 
-```
 
 ### Unadjusted
 
@@ -504,16 +317,10 @@ add_ci4interaction(fit_p2, "P2", "P2:SEXFemale")
 #### Pattern 1
 
 ```{r}
-mn_flip = mn %>% mutate(SEX = fct_rev(SEX))
-
-fit_flip <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
-              MARITAL_STATUS + HOME_SCORE + mat_hard
-             , data = mn_flip)
-
 fit_p1a <- lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
               MARITAL_STATUS + HOME_SCORE + mat_hard
              , data = mn)
-summary(fit_p1a)
+
 add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")
 glance(fit_p1a)[,-c(11:12)]
 ```
@@ -526,30 +333,16 @@ fit_p2a <- lm(WISC ~ P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE +
              , data = mn)
 add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")
 glance(fit_p2a)[,-c(11:12)]
-
-summary(fit_p2a)
 ```
 
-#### Table
+## Table 3
 
 ```{r}
 tabp1 = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")[c(2,11:12),] %>% mutate(pattern = "Pattern 1")
 tabp2 = add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")[c(2,11:12),] %>% mutate(pattern = "Pattern 2")
 
-load("./Stan/fits/pattern1_non.rda")
-bayesp1 = add_ci4int_bayes(p1_non)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
-
-load("./Stan/fits/pattern2_non.rda")
-bayesp2 = add_ci4int_bayes(p2_non)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
-
-tabfreq = bind_rows(tabp1, tabp2)[,c(1:2, 6:8)] %>% mutate(model = "Traditional")
-
-tabbayes = bind_rows(bayesp1, bayesp2)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
-            rename(term = beta, estimate = `50%`) %>% 
-            rename_all(~str_replace(., "%", " %")) %>% 
-            mutate(model = "Bayesian")
-
-model_table = bind_rows(tabfreq, tabbayes) %>% dplyr::select(model, pattern, everything()) %>% 
+model_table = bind_rows(tabp1, tabp2)[,c(1:2, 6:8)] %>% mutate(model = "Traditional") %>% 
+  dplyr::select(model, pattern, everything()) %>% 
   arrange(model, pattern, term) %>% 
   mutate_if(is.numeric, round, 1) %>% 
   mutate(`95% Confidence Interval` = str_c("(", `2.5 %`, ", ", `97.5 %`, ")")) %>% 
@@ -560,214 +353,6 @@ model_table = bind_rows(tabfreq, tabbayes) %>% dplyr::select(model, pattern, eve
     dplyr::select(-`2.5 %`, -`97.5 %`, -pattern)
 model_table
 
-stargazer::stargazer(model_table, summary = F)
+# health model table
+# stargazer::stargazer(model_table, summary = F)
 ```
-
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-  <br>  
-
-## Extra
-
-### Some missingness
-  
-**Are the people missing WISC the same as the people missing HOME?**  
-  
-There are `r ppp_343 %>% filter(is.na(HOME_SCORE)) %>% nrow()` people missing `HOME` and `r ppp_343 %>% filter(!is.na(WISC) & is.na(HOME_SCORE)) %>% nrow()` people missing `HOME` but not `WISC`. This is `r round((16/(343-32))*100, 2)`% of 311 (total with WISC).  
-  
-**Are the people missing WISC the same as the people missing maternal IQ?**  
-  
-There are `r ppp_343 %>% filter(is.na(M_IQ)) %>% nrow()` people missing `maternal IQ` and `r ppp_343 %>% filter(!is.na(WISC) & is.na(M_IQ)) %>% nrow()` people missing `maternal IQ` but not `WISC`. This is `r round((8/(343-32))*100,2)`% of 311. Two people are missing both `HOME` and `maternal IQ`.
-  
-**Can age 9 HOME predict age 7?**  
-  
-`all:`  
-`lm(formula = HOMETOT ~ HOME_TOT9, data = combo)`  
-`---`  
-`Residuals:`  
-`    Min      1Q  Median      3Q     Max `  
-`-17.716  -2.943   1.099   3.830  10.645 `  
-`---`  
-`Coefficients:`  
-`            Estimate Std. Error t value Pr(>|t|)     `  
-`(Intercept) 30.41181    2.95846  10.280  < 2e-16 *** `  
-`HOME_TOT9    0.22694    0.07178   3.161  0.00201 **  `  
-`---`  
-`Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1`  
-`---`  
-`Residual standard error: 5.696 on 115 degrees of freedom`   
-`  (610 observations deleted due to missingness)`  
-`Multiple R-squared:  0.07996,	Adjusted R-squared:  0.07196 `  
-`F-statistic: 9.995 on 1 and 115 DF,  p-value: 0.002008`   
-  
-
-**Can age 9 WISC predict age 7?**  
-  
-`Call:` 
-`lm(formula = WISC ~ WSC_CSFS_108, data = combo)`  
-`---`  
-`Residuals:`  
-`    Min      1Q  Median      3Q     Max `  
-`-23.622  -5.513  -0.530   5.378  23.562 `  
-`---`  
-`Coefficients:`  
-`             Estimate Std. Error t value Pr(>|t|)    `  
-`(Intercept)  23.46166    2.73993   8.563   <2e-16 ***`  
-`WSC_CSFS_108  0.78160    0.02839  27.530   <2e-16 ***`  
-`---`  
-`Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1`  
-`---`  
-`Residual standard error: 7.938 on 461 degrees of freedom`  
-`  (264 observations deleted due to missingness)`  
-`Multiple R-squared:  0.6218,	Adjusted R-squared:  0.621 `  
-`F-statistic: 757.9 on 1 and 461 DF,  p-value: < 2.2e-16`  
-  
-  
-### Sensitivity
-
-```{r, fig.height=7}
-subset = whole %>% dplyr::select(SID, WISC, P1, SEX, M_IQ, ALCOHOL, M_EDU, M_AGE, mat_hard,
-                                 MARITAL_STATUS, HOME_SCORE) %>% drop_na() %>% 
-  mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), ~scale(.)[,1])
-
-fit_sense <- gam(WISC ~ s(P1, by = SEX) + SEX + M_IQ + ALCOHOL + M_EDU + 
-                     MARITAL_STATUS + HOME_SCORE + M_AGE + mat_hard, 
-                 data = subset)
-summary(fit_sense)
-
-pred = as.data.frame(predict.gam(fit_sense, se.fit = T, type="terms"))
-as_tibble(pred)
-
-const = tibble(P1 = seq(0, max(subset$P1), length=289)) %>% 
-  mutate(SEX = "Female",
-          M_IQ = 0, 
-          ALCOHOL = as_factor("No"),
-          M_EDU = "≥ High school degree or equivalent", 
-          M_AGE = 0, 
-          mat_hard = "No",
-          MARITAL_STATUS = "Never Married", 
-          HOME_SCORE = 0)
-
-pred_f = as.data.frame(predict.gam(fit_sense, newdata = const, se.fit = T, type="terms"))
-
-sense_f = as_tibble(pred_f) %>% 
-  bind_cols(., const) %>% 
-  dplyr::select(grep("(SEX|P1)", names(.))) %>%
-  mutate(predIQ = mean(subset$WISC) + fit.SEX + fit.s.P1..SEXMale + fit.s.P1..SEXFemale,
-         se= se.fit.SEX + se.fit.s.P1..SEXMale + se.fit.s.P1..SEXFemale,
-         lci = predIQ - 1.96*se,
-         uci = predIQ + 1.96*se) %>% 
-              mutate(model = "Sensitivity") %>% 
-  dplyr::select(-c(fit.SEX, fit.s.P1..SEXMale, fit.s.P1..SEXFemale,
-                   se.fit.SEX, se.fit.s.P1..SEXMale, se.fit.s.P1..SEXFemale))
-
-sense_all = subset %>%
-  bind_cols(., pred) %>% 
-  mutate(extreme = ifelse(SID %in% c(1209, 1229), "Yes", "No")) %>% 
-  dplyr::select(WISC, grep("(SEX|P1)", names(.)), extreme) %>% 
-  mutate(predIQ = mean(WISC) + fit.SEX + fit.s.P1..SEXMale + fit.s.P1..SEXFemale,
-         se= se.fit.SEX + se.fit.s.P1..SEXMale + se.fit.s.P1..SEXFemale,
-         lci = predIQ - 1.96*se,
-         uci = predIQ + 1.96*se,
-         model = "Sensitivity") %>% 
-  dplyr::select(-c(fit.SEX, fit.s.P1..SEXMale, fit.s.P1..SEXFemale,
-                   se.fit.SEX, se.fit.s.P1..SEXMale, se.fit.s.P1..SEXFemale))
-```
-
-```{r}
-load("./sense_plot.rda")
-main
-```
-
-```{r}
-pal = brewer.pal(11, "RdBu")[c(2,4,11,10)]
-
-sense.plot = bind_rows(sense_all, main)
-
-sense.plot %>% 
-  ggplot(aes(x = P1, group = interaction(SEX, model),fill = interaction(SEX, model))) +
-  geom_point(aes(y = WISC), alpha=0.25, color="grey") +
-  geom_point(aes(y = WISC), color="black",
-             data = subset(sense_all, extreme =="Yes")) +
-  # geom_ribbon(aes(ymin = lci,
-  #                 ymax = uci), alpha = 0.5,
-  #             data = sense_f) +
-  # geom_line(aes(y = predIQ), data = sense_f) +
-  geom_ribbon(aes(ymin = lci,
-                  ymax = uci), alpha = 0.5,
-              data = subset(sense_all, SEX == "Male")) +
-  geom_line(aes(y = predIQ),
-            data = subset(sense_all, SEX == "Male")) + 
-  
-  geom_ribbon(aes(ymin = lci,
-                  ymax = uci), alpha = 0.5) +
-  geom_line(aes(y = predIQ), data = sense_f) +
-  geom_ribbon(aes(ymin = lci,
-                  ymax = uci), alpha = 0.5) +
-  geom_line(aes(y = predIQ)) +
-  #scale_fill_manual(values = pal, labels = c("", "Female", "", "Male")) +
-  #scale_color_manual(values = pal, labels = c("", "Female", "", "Male")) +
-  facet_grid(.~SEX, scales = "free_x") +
-  labs(y = "WISC Full Scale IQ", x = "Pattern 1 concentration") +
-  theme(legend.title = element_blank())
-```
-
-#### Extreme values
-
-```{r}
-#bind_cols(mn_ppp, ewa) %>% filter(P2 > 30) %>% select(SID, P1, P2, everything())
-  
-extreme = bind_cols(mn_ppp, ewa) %>% filter(P2 > mean(P2) + 5*sd(P2)) %>%
-  t() %>% as.data.frame() %>% rownames_to_column(var = "Chemical") %>% 
-  mutate_at(vars(2:4), as.numeric) %>% 
-  filter(Chemical != "SID")
-```
-
-```{r, figend, fig.height=10, fig.width=12}
-mn_ppp %>%
-  pivot_longer(MEHHP:BPA,
-               names_to = "Chemical") %>% 
-  left_join(., extreme) %>% 
-  filter(grepl("^M", Chemical) | Chemical == "BPA") %>%
-  filter(!(Chemical %in% c("MEP", "M_PB"))) %>% 
-  mutate(Chemical = str_replace(Chemical, "_", "-")) %>% 
-  ggplot(aes(x = value)) +
-  geom_histogram(aes(y = ..density..), fill = "#0072B5", alpha=0.75) +
-  geom_vline(aes(xintercept = V1), linetype = "dashed", color = "#E18727") + 
-  geom_vline(aes(xintercept = V2), linetype = "dashed", color = "#20854E") + 
-  geom_vline(aes(xintercept = V3), linetype = "dashed", color = "#F21A00") + 
-  facet_wrap(Chemical~., scales = "free") + 
-  labs(y = "Density", x="") +
-  theme(axis.text.y = element_blank(),
-        text = element_text(size = 30),
-        axis.text.x = element_text(size = 10),
-        axis.title.y = element_text(size = 35))
-```
-
-Highest female = Red  
-2nd highest female = Green  
-Highest male = Yellow  
-  
-
