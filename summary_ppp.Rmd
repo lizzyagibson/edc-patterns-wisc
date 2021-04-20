@@ -166,7 +166,8 @@ conc = mn_ppp %>% # get summary stats for concentrations
   dplyr::select(Chemical:Min, Q25:Q75, Max)
 
 ppp_table <- left_join(detected, conc, by = c("Chemical")) %>% # combine concentrations and detection into table
-  mutate_if(is.numeric, round, digits = 2) %>% 
+  mutate(`% <LOD` = `% <LOD` * 100) %>% 
+  mutate_if(is.numeric, round, digits = 4) %>% 
   mutate(group = case_when(Chemical == "M_PB" ~ "phenols",
                            grepl("^M", Chemical) ~ "phthalates",
                            TRUE ~ "phenols")) %>% 
