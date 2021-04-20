@@ -3,6 +3,8 @@ Patterns of phthalates, phenols, and parabens measured in pregnant women in Moth
 
 ## in this repo:
 
+[codebook.md](codebook.md) explains variables.
+
 ### sourced from other scripts
 
 1. `packages.R` has all the packages used and a few functions I wrote.  
