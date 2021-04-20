@@ -22,3 +22,9 @@ Patterns of phthalates, phenols, and parabens measured in pregnant women in Moth
 1. `bn2mf_score_reg_int_gamma.stan` has the completely non-informative prior model (main model).
 2. `bn2mf_score_reg_int_infp1_nonc.stan` and `bn2mf_score_reg_int_infp2_nonc.stan` have informative priors on everything but covariates.
 3. `bn2mf_score_reg_int_infp1.stan` and `bn2mf_score_reg_int_infp2.stan` have informative priors on everything.
+
+### ignore
+
+1. `misc` folder.
+2. `matlab` folder.
+* Nothing in these affects current analysis.

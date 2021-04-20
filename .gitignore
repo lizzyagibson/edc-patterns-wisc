@@ -3,7 +3,7 @@
 .RData
 .Ruserdata
 *.Rproj
-*.RDA
+*.rda
 *.pdf
 *.mat
 *.csv

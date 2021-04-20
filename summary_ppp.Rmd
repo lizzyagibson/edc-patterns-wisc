@@ -9,7 +9,7 @@ output:
     toc_float: yes
 ---
 
-```{r setup, include=FALSE}
+```{r setup, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center')
 
 source("./packages.R")
@@ -58,12 +58,16 @@ grubbs.test(log(whole_m1$P1))
 ## Demographics
 
 ```{r, demo}
+# Ran BN2MF on this subset
 ppp_343 = left_join(ppp_cov, mn_outcome) %>% mutate(Subsample = "BN2MF Subsample") %>% rename(HOME_SCORE = HOMETOT)
 
+# this subset had WISC measured
 ppp_311 = ppp_343 %>% filter(!is.na(WISC)) %>% mutate(Subsample = "WISC Subsample")
 
+# this subset had all covariates measured
 ppp_289 = ppp_311 %>% filter(!is.na(M_IQ) & !is.na(HOME_SCORE)) %>% mutate(Subsample = "Complete Cases")
 
+# whole cohort is 727 mothers
 cohort = mn_demo %>% 
         left_join(., mn_outcome, by = "SID") %>% 
         mutate(Subsample = "Entire Cohort") %>% 

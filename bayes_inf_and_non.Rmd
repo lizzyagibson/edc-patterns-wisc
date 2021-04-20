@@ -7,10 +7,10 @@ output:
   html_document:
     toc: yes
     toc_float: yes
-    code_folding: 'hide'
+
 ---
 
-```{r setup, include=FALSE}
+```{r setup, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center', cache=TRUE,
                       autodep = TRUE)
 
@@ -156,6 +156,7 @@ p2_dat = list(N = N,
 # save(p2_hybrid, file = "./Stan/fits/pattern2_hybrid.rda")
 ```
 
+**You have these .rda files, so you can run from here down.**
 ```{r, stan}
 load("./Stan/fits/pattern1_non.rda")
 load("./Stan/fits/pattern2_non.rda")
