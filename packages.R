@@ -1,38 +1,23 @@
 options(scipen = 999)
-library(haven)
-library(tidyverse)
-library(RColorBrewer)
-library(mgcv)
-library(janitor)
-library(gt)
-library(reshape2)
-library(broom)
-library(tableone)
-library(xtable)
-library(GGally)
-library(gtsummary)
-library(huxtable)
-library(rcompanion)
-library(R.matlab)
-library(MNdata) # Local package
-library(ggsci)
-library(patchwork)
-library(rstan)
-library(bayesplot)
-library(shinystan)
-library(rstanarm)
-library(tictoc)
-library(recipes)
-library(ggridges)
-library(bayestestR)
-library(olsrr)
-library(mvoutlier)
-library(outliers)
-library(EnvStats)
-library(finalfit) 
-library(mice)
-library(VIM)
 
+# packages used
+list.of.packages <- c( "haven", "tidyverse", "RColorBrewer", "mgcv", "janitor", "gt", "reshape2", "broom", 
+                       "tableone", "xtable", "GGally", "gtsummary", "huxtable", "rcompanion", "R.matlab", 
+                       "ggsci", "patchwork", "rstan", "bayesplot", "shinystan", "rstanarm", "tictoc", "recipes", 
+                       "ggridges", "bayestestR", "olsrr", "mvoutlier", "outliers", "EnvStats", "finalfit",  
+                       "mice", "VIM")
+
+# this is a local data package
+library(MNdata)
+
+# if these aren't installed, install them
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+# load all packages
+lapply(list.of.packages, library, character.only = TRUE)
+
+# set ggplot theme
 theme_set(theme_bw(base_size = 20) + 
             theme(strip.background = element_rect(fill="white"),
                   axis.text.x = element_text(angle = 45, hjust = 1),
@@ -57,10 +42,12 @@ get_lower_tri<-function(x){
   return(x)
 }
 
+# quick tidy output with confidence intervals
 tidy_ci = function(fit) {
   tidy(fit) %>% bind_cols(., as_tibble(confint(fit)))
 }
 
+# add CI for interaction term to tidy output
 add_ci4interaction <- function(fit, term1, term2) {
   # CONFIDENCE INTERVAL for pattern in females
   # Compute association and its uncertainty 
@@ -99,6 +86,7 @@ add_ci4interaction <- function(fit, term1, term2) {
     mutate(term = ifelse(term == term1, paste(term1, "in males"), term))
 }
 
+# add distribution for interaction term to Bayesian output
 add_ci4int_bayes = function(fit) {
   int_sum = summary(fit, c("beta_int", "beta_sex", "beta_p"))$summary
   
