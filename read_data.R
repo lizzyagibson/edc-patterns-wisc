@@ -1,3 +1,4 @@
+# Robbie: cannot source this without MNData. I could comment and skip but thought I'd check with you before proceeding
 source("./packages.R")
 
 # Results from BNMF
