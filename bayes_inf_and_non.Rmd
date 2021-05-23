@@ -168,6 +168,25 @@ load("./Stan/fits/pattern1_hybrid.rda")
 load("./Stan/fits/pattern2_hybrid.rda")
 ```
 
+```{r}
+trace = c("beta_int", "beta_sex", "beta_p")
+
+traceplot(p1_non, pars = trace, inc_warmup = TRUE)
+color_scheme_set("mix-blue-pink")
+mcmc_trace(p1_non, pars = trace, n_warmup = 1000,
+                 facet_args = list(nrow = 3, labeller = label_parsed))
+
+traced <- stan_trace(p1_non, pars = trace, nrow = 3)
+traced
+
+traced +
+    scale_color_brewer(type = "div") +
+    theme(legend.position = "none")
+facet_style <- theme(strip.background = ggplot2::element_rect(fill = "white"),
+                       strip.text = ggplot2::element_text(size = 13, color = "black"))
+traced + facet_style
+```
+
 ### Summary
 
 #### Pattern 1
@@ -230,7 +249,6 @@ add_ci4int_bayes(p2_non)[,1:2] %>%
   bind_cols(., inf_ncov = add_ci4int_bayes(p2_hybrid)[,2])
 ```
 
-
 ### Viz
 
 #### Pattern 1
@@ -251,6 +269,19 @@ mcmc_areas(p1non_coef,
   "int" = "Interaction", 
   "p_male" = "P2 in males",
   "p_female" = "P2 in females")) + xlim(c(-15,15))
+```
+
+```{r}
+ext_p1 <- extract(p1_non)
+p1non_coef = cbind(ext_p1$beta_int, ext_p1$beta_sex, ext_p1$beta_p) %>% 
+  as_tibble() %>% 
+  rename(int=1, sex=2, Males=3) %>% 
+             mutate(Females = Males + int) %>% 
+  dplyr::select(-sex, -int)
+
+mcmc_areas(p1non_coef,
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                  "with medians and 95% intervals")
 ```
 
 ##### Informative Pattern
