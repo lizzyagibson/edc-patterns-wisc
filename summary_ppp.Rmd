@@ -22,39 +22,6 @@ source("./read_data.R")
 * 3 parabens  
 * 9 phthalates  
 
-### Outliers
-
-```{r}
-mod = lm(WISC ~ P1 + SEX*P1 + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
-              MARITAL_STATUS + HOME_SCORE + mat_hard
-             , data = whole)
-summary(mod)
-plot(mod)
-
-# 274 influential based on Cooks distance, residual vs. leverage plot
-ols_plot_cooksd_chart(mod)
-ols_plot_resid_lev(mod)
-
-# get rid of highest
-whole_m1 = whole[-which.max(whole$P1),]
-mod2 = lm(WISC ~ P1 + SEX*P1 + SEX + SEX + M_IQ + ALCOHOL + M_EDU  + M_AGE +
-              MARITAL_STATUS + HOME_SCORE + mat_hard
-             , data = whole_m1)
-summary(mod2)
-plot(mod2)
-
-# cooks dist for 264
-ols_plot_cooksd_chart(mod2)
-ols_plot_resid_lev(mod2)
-
-whole[c(319, 307),]
-
-max(whole$P1) # 319
-
-grubbs.test(log(whole$P1)) # highest values is an outlier
-grubbs.test(log(whole_m1$P1))
-```
-
 ## Demographics
 
 ```{r, demo}
@@ -169,7 +136,8 @@ conc = mn_ppp %>% # get summary stats for concentrations
               values_from = "qs") %>% 
   dplyr::select(Chemical:Min, Q25:Q75, Max)
 
-ppp_table <- left_join(detected, conc, by = c("Chemical")) %>% # combine concentrations and detection into table
+ppp_table <- left_join(detected, conc, by = c("Chemical")) %>% 
+  # combine concentrations and detection into table
   mutate(`% <LOD` = `% <LOD` * 100) %>% 
   mutate_if(is.numeric, round, digits = 4) %>% 
   mutate(group = case_when(Chemical == "M_PB" ~ "phenols",
@@ -183,8 +151,8 @@ ppp_table <- left_join(detected, conc, by = c("Chemical")) %>% # combine concent
 ```{r}
 ppp_table %>% knitr::kable(caption = "Distribution of phathlate metabolites & phenols (ng/ml) in maternal spot urine during the third trimester of pregnancy (n = 343)")
 
-# ppp_table %>%
-#   dplyr::select(1:2, 6:8) %>%
+ppp_table %>%
+  dplyr::select(1:2, 6:8) # %>%
 #   stargazer::stargazer(summary = F)
 # ^ print to latex
 
