@@ -1,5 +1,5 @@
 # Robbie: cannot source this without MNData. I could comment and skip but thought I'd check with you before proceeding
-source("./packages.R")
+source("./source/packages.R")
 
 # this is a local data package
 library(MNdata) 

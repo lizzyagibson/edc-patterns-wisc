@@ -12,8 +12,7 @@ output:
 ```{r setup, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center')
 
-source("./packages.R")
-source("./read_data.R")
+source("./source/read_data.R")
 ```
 
 ## Mothers & Newborns

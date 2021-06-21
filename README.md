@@ -13,9 +13,15 @@ Patterns of phthalates, phenols, and parabens measured in pregnant women in Moth
 ### analysis 
 
 1. `summary_ppp.Rmd` has descriptive stats, table 1, table 2, OLS health models.
+  * You cannot run this file.
+  * HTML version included.
 2. `bayes_inf_and_non.Rmd` has Bayesian health models.
-    * this calls Stan files
-3. `sense_plot.R` makes the supplemental figure for the sensitivity analysis.
+  * this calls Stan files
+  * You can run this file with the Stan model fits.
+  * HTML version included.
+3. `sensitivity.Rmd` makes the supplemental figure for the sensitivity analysis.
+  * You cannot run this file.
+  * HTML version included.
 
 ### Stan
 

@@ -15,8 +15,8 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='
                       autodep = TRUE)
 
 options(mc.cores = parallel::detectCores())
-source("./packages.R")
-# source("./read_data.R")
+source("./source/packages.R")
+source("./source/read_data.R")
 ```
 
 ## Mothers & Newborns
@@ -27,72 +27,72 @@ source("./packages.R")
 
 ```{r, dat}
 # UNSTANDARDIZED GAMMA*GAMMA
-# alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
-# beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
-# 
-# alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
-# beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
-# 
-# bayes = bind_cols(ppp_cov, ewa, alpha_w, beta_w) %>% 
-#         dplyr::select(-GEST, -ETH) %>% 
-#         rename(HOME_SCORE = HOMETOT) %>% 
-#         filter(P1 != max(P1)) %>%
-#         filter(P1 != max(P1)) %>%  # removes two outliers
-#         drop_na() %>% 
-#         mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
-#         mutate_if(is.character, as_factor)
-# 
-# # For stan model ####
-# N = nrow(bayes)
-# C = 7 # number of covariates
-# x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
-#                  data = bayes)[,-1]
-# sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
-# y = bayes$WISC
-# 
-# # Predictors of interest
-# 
-# ### Unscaled Gamma
-# Walpha1 = bayes$walpha1
-# # Wbeta1  = bayes$wbeta1 # want the scaled W beta
-# 
-# Aalpha1 = alpha_a[[1]]
-# Abeta1  = beta_a[[1]]
-# 
-# Walpha2 = bayes$walpha2
-# # Wbeta2 = bayes$wbeta2 # want scaled beta
-# 
-# Aalpha2 = alpha_a[[2]]
-# Abeta2  = beta_a[[2]]
-# 
-# ### Scaled and Standardized Gamma
-# # don't scale alpha, only scale beta
-# Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
-# Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
+alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
+beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
+
+alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
+beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
+
+bayes = bind_cols(ppp_cov, ewa, alpha_w, beta_w) %>%
+        dplyr::select(-GEST, -ETH) %>%
+        rename(HOME_SCORE = HOMETOT) %>%
+        filter(P1 != max(P1)) %>%
+        filter(P1 != max(P1)) %>%  # removes two outliers
+        drop_na() %>%
+        mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>%
+        mutate_if(is.character, as_factor)
+
+# For stan model ####
+N = nrow(bayes)
+C = 7 # number of covariates
+x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard,
+                 data = bayes)[,-1]
+sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
+y = bayes$WISC
+
+# Predictors of interest
+
+### Unscaled Gamma
+Walpha1 = bayes$walpha1
+# Wbeta1  = bayes$wbeta1 # want the scaled W beta
+
+Aalpha1 = alpha_a[[1]]
+Abeta1  = beta_a[[1]]
+
+Walpha2 = bayes$walpha2
+# Wbeta2 = bayes$wbeta2 # want scaled beta
+
+Aalpha2 = alpha_a[[2]]
+Abeta2  = beta_a[[2]]
+
+### Scaled and Standardized Gamma
+# don't scale alpha, only scale beta
+Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
+Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
 
 # don't scale a only scale W
 ```
 
 ```{r, standat}
-# p1_dat = list(N = N,
-#                   C = C,
-#                   x = x,
-#                   y = y,
-#                   sex = sex,
-#                   alpha_w = Walpha1,
-#                   beta_w  = Wbeta1,
-#                   alpha_a = Aalpha1,
-#                   beta_a  = Abeta1)
-#                   
-# p2_dat = list(N = N,
-#                   C = C,
-#                   x = x,
-#                   y = y,
-#                   sex = sex,
-#                   alpha_w = Walpha2,
-#                   beta_w  = Wbeta2,
-#                   alpha_a = Aalpha2,
-#                   beta_a  = Abeta2)
+p1_dat = list(N = N,
+                  C = C,
+                  x = x,
+                  y = y,
+                  sex = sex,
+                  alpha_w = Walpha1,
+                  beta_w  = Wbeta1,
+                  alpha_a = Aalpha1,
+                  beta_a  = Abeta1)
+
+p2_dat = list(N = N,
+                  C = C,
+                  x = x,
+                  y = y,
+                  sex = sex,
+                  alpha_w = Walpha2,
+                  beta_w  = Wbeta2,
+                  alpha_a = Aalpha2,
+                  beta_a  = Abeta2)
 ```
 
 ## Bayesian models
