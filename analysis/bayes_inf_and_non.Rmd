@@ -1,0 +1,408 @@
+---
+title: "Phthalate & phenol exposure patterns"
+subtitle: "& child intelligence in M&N cohort"
+author: "Lizzy Gibson"
+date: "3/16/2021"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='center', cache=TRUE,
+                      autodep = TRUE)
+
+options(mc.cores = parallel::detectCores())
+source("./packages.R")
+# source("./read_data.R")
+```
+
+## Mothers & Newborns
+
+* 5 phenols  
+* 3 parabens  
+* 9 phthalates  
+
+```{r, dat}
+# UNSTANDARDIZED GAMMA*GAMMA
+# alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
+# beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
+# 
+# alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
+# beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
+# 
+# bayes = bind_cols(ppp_cov, ewa, alpha_w, beta_w) %>% 
+#         dplyr::select(-GEST, -ETH) %>% 
+#         rename(HOME_SCORE = HOMETOT) %>% 
+#         filter(P1 != max(P1)) %>%
+#         filter(P1 != max(P1)) %>%  # removes two outliers
+#         drop_na() %>% 
+#         mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
+#         mutate_if(is.character, as_factor)
+# 
+# # For stan model ####
+# N = nrow(bayes)
+# C = 7 # number of covariates
+# x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
+#                  data = bayes)[,-1]
+# sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
+# y = bayes$WISC
+# 
+# # Predictors of interest
+# 
+# ### Unscaled Gamma
+# Walpha1 = bayes$walpha1
+# # Wbeta1  = bayes$wbeta1 # want the scaled W beta
+# 
+# Aalpha1 = alpha_a[[1]]
+# Abeta1  = beta_a[[1]]
+# 
+# Walpha2 = bayes$walpha2
+# # Wbeta2 = bayes$wbeta2 # want scaled beta
+# 
+# Aalpha2 = alpha_a[[2]]
+# Abeta2  = beta_a[[2]]
+# 
+# ### Scaled and Standardized Gamma
+# # don't scale alpha, only scale beta
+# Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
+# Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
+
+# don't scale a only scale W
+```
+
+```{r, standat}
+# p1_dat = list(N = N,
+#                   C = C,
+#                   x = x,
+#                   y = y,
+#                   sex = sex,
+#                   alpha_w = Walpha1,
+#                   beta_w  = Wbeta1,
+#                   alpha_a = Aalpha1,
+#                   beta_a  = Abeta1)
+#                   
+# p2_dat = list(N = N,
+#                   C = C,
+#                   x = x,
+#                   y = y,
+#                   sex = sex,
+#                   alpha_w = Walpha2,
+#                   beta_w  = Wbeta2,
+#                   alpha_a = Aalpha2,
+#                   beta_a  = Abeta2)
+```
+
+## Bayesian models
+
+* this is only non-informative models
+* need to change informative and hybrid
+
+```{r}
+# p1_non <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+#     data = p1_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p1_non, file = "./Stan/fits/pattern1_non.rda")
+# 
+# p2_non <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+#     data = p2_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p2_non, file = "./Stan/fits/pattern2_non.rda")
+
+# p1_inf <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_infp1.stan",  # Stan program
+#     data = p1_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p1_inf, file = "./Stan/fits/pattern1_inform.rda")
+
+# p2_inf <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_infp2.stan",  # Stan program
+#     data = p2_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p2_inf, file = "./Stan/fits/pattern2_inform.rda")
+
+# p1_hybrid <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_infp1_nonc.stan",  # Stan program
+#     data = p1_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p1_hybrid, file = "./Stan/fits/pattern1_hybrid.rda")
+
+# p2_hybrid <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_infp2_nonc.stan",  # Stan program
+#     data = p2_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p2_hybrid, file = "./Stan/fits/pattern2_hybrid.rda")
+```
+
+**You have these .rda files, so you can run from here down.**
+```{r, stan}
+load("./Stan/fits/pattern1_non.rda")
+load("./Stan/fits/pattern2_non.rda")
+
+load("./Stan/fits/pattern1_inform.rda")
+load("./Stan/fits/pattern2_inform.rda")
+
+load("./Stan/fits/pattern1_hybrid.rda")
+load("./Stan/fits/pattern2_hybrid.rda")
+```
+
+```{r}
+trace = c("beta_int", "beta_sex", "beta_p")
+
+stan_trace(p1_non, pars = trace, nrow = 3)
+```
+
+### Summary
+
+#### Pattern 1
+
+##### Non-informative
+```{r, p1non}
+params = names(p1_non)[grep("(alpha|beta)", names(p1_non))]
+# print(p1_non, params)
+add_ci4int_bayes(p1_non)
+```
+
+##### Informative Pattern
+```{r, p1inf}
+# print(p1_inf, params)
+add_ci4int_bayes(p1_inf)
+```
+
+##### Informative Everything
+```{r, p1inf3}
+# print(p1_hybrid, params)
+add_ci4int_bayes(p1_hybrid)
+```
+
+##### All
+
+```{r, all1}
+add_ci4int_bayes(p1_non)[,1:2] %>% 
+  rename(non_inf = mean) %>% 
+  bind_cols(., inf_pat =add_ci4int_bayes(p1_inf)[,2]) %>% 
+  bind_cols(., inf_cov = add_ci4int_bayes(p1_hybrid)[,2])
+```
+
+#### Pattern 2
+
+##### Non-informative
+```{r, p2non}
+params = names(p2_non)[grep("(alpha|beta)", names(p2_non))]
+# print(p2_non, params)
+add_ci4int_bayes(p2_non)
+```
+
+##### Informative Pattern
+```{r, p2inf}
+# print(p2_inf, params)
+add_ci4int_bayes(p2_inf)
+```
+
+##### Informative Everything
+```{r, p1inf1}
+# print(p2_hybrid, params)
+add_ci4int_bayes(p2_hybrid)
+```
+
+#### All
+
+```{r, all2}
+add_ci4int_bayes(p2_non)[,1:2] %>% 
+  rename(non_inf = mean) %>% 
+  bind_cols(., inf_pat =add_ci4int_bayes(p2_inf)[,2]) %>% 
+  bind_cols(., inf_ncov = add_ci4int_bayes(p2_hybrid)[,2])
+```
+
+### Viz
+
+#### Pattern 1
+
+##### Non-informative
+```{r}
+ext_p1 <- extract(p1_non)
+p1non_coef = cbind(ext_p1$beta_int, ext_p1$beta_sex, ext_p1$beta_p) %>% 
+  as_tibble() %>% 
+  rename(int=1, sex=2, p_male=3) %>% 
+             mutate(p_female = p_male + int) %>% 
+  dplyr::select(-sex)
+
+mcmc_areas(p1non_coef,
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                  "with medians and 95% intervals") +
+  scale_y_discrete(labels=c(
+  "int" = "Interaction", 
+  "p_male" = "P1 in males",
+  "p_female" = "P1 in females")) + xlim(c(-15,15))
+```
+
+##### Informative Pattern
+```{r}
+ext_p1i = extract(p1_hybrid)
+p1i_coef = cbind(ext_p1i$beta_int, ext_p1i$beta_sex, ext_p1i$beta_p) %>% 
+  as_tibble() %>% 
+  rename(int=1, sex=2, p_male=3) %>% 
+             mutate(p_female = p_male + int) %>% 
+  dplyr::select(-sex)
+
+mcmc_areas(p1i_coef,
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                  "with medians and 95% intervals") +
+  scale_y_discrete(labels=c(
+  "int" = "Interaction", 
+  "p_male" = "P1 in males",
+  "p_female" = "P1 in females")) + xlim(c(-15,15))
+```
+
+##### Informative Everything
+```{r}
+ext_p1inc = extract(p1_inf)
+p1i_coef_nc = cbind(ext_p1inc$beta_int, ext_p1inc$beta_sex, ext_p1inc$beta_p) %>% 
+  as_tibble() %>% 
+  rename(int=1, sex=2, p_male=3) %>% 
+             mutate(p_female = p_male + int) %>% 
+  dplyr::select(-sex)
+
+mcmc_areas(p1i_coef_nc,
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                  "with medians and 95% intervals") +
+  scale_y_discrete(labels=c(
+  "int" = "Interaction", 
+  "p_male" = "P1 in males",
+  "p_female" = "P1 in females")) + xlim(c(-15,15))
+```
+
+#### Pattern 2
+
+##### Non-informative
+```{r}
+ext_p2 = extract(p2_non)
+p2non_coef = cbind(ext_p2$beta_int, ext_p2$beta_sex, ext_p2$beta_p) %>% 
+  as_tibble() %>% 
+  rename(int=1, sex=2, p_male=3) %>% 
+             mutate(p_female = p_male + int) %>% 
+  dplyr::select(-sex)
+
+mcmc_areas(p2non_coef,
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                  "with medians and 95% intervals") +
+  scale_y_discrete(labels=c(
+  "int" = "Interaction", 
+  "p_male" = "P2 in males",
+  "p_female" = "P2 in females")) + xlim(c(-12,12))
+```
+
+##### Informative Pattern
+```{r}
+ext_p2i = extract(p2_hybrid)
+p2i_coef = cbind(ext_p2i$beta_int, ext_p2i$beta_sex, ext_p2i$beta_p) %>% 
+  as_tibble() %>% 
+  rename(int=1, sex=2, p_male=3) %>% 
+             mutate(p_female = p_male + int) %>% 
+  dplyr::select(-sex)
+
+mcmc_areas(p2i_coef,
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                  "with medians and 95% intervals") +
+  scale_y_discrete(labels=c(
+  "int" = "Interaction", 
+  "p_male" = "P2 in males",
+  "p_female" = "P2 in females")) + xlim(c(-12,12))
+```
+
+##### Informative Everything
+```{r}
+ext_p2inc = extract(p2_inf)
+p2i_coef_nc = cbind(ext_p2inc$beta_int, ext_p2inc$beta_sex, ext_p2inc$beta_p) %>% 
+  as_tibble() %>% 
+  rename(int=1, sex=2, p_male=3) %>% 
+             mutate(p_female = p_male + int) %>% 
+  dplyr::select(-sex)
+
+mcmc_areas(p2i_coef_nc,
+           prob = 0.95) + ggtitle("Posterior distributions",
+                                  "with medians and 95% intervals") +
+  scale_y_discrete(labels=c(
+  "int" = "Interaction", 
+  "p_male" = "P2 in males",
+  "p_female" = "P2 in females")) + xlim(c(-12,12))
+```
+
+## Table 3
+```{r}
+bayesp1 = add_ci4int_bayes(p1_non)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
+bayesp2 = add_ci4int_bayes(p2_non)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
+
+bayes_table = bind_rows(bayesp1, bayesp2)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
+            rename(term = beta, estimate = `50%`) %>% 
+            rename_all(~str_replace(., "%", " %")) %>% 
+            mutate(model = "Bayesian") %>% 
+  dplyr::select(model, pattern, everything()) %>% 
+  arrange(model, pattern, term) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  mutate(`95% Confidence Interval` = str_c("(", `2.5 %`, ", ", `97.5 %`, ")")) %>% 
+  mutate(term = case_when(term == "sex*p" | grepl("SEX", term) ~ " interaction term",
+                          TRUE ~ term),
+         term = str_remove(term, "(P1|P2|p)"),
+         term = str_c(pattern, term)) %>% 
+    dplyr::select(-`2.5 %`, -`97.5 %`, -pattern)
+bayes_table
+
+# health model table
+# stargazer::stargazer(bayes_table, summary = F)
+```
+
+## Supplemental Table S2
+
+```{r}
+bayesp1_i = add_ci4int_bayes(p1_inf)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
+bayesp2_i = add_ci4int_bayes(p2_inf)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
+bayesp1_h = add_ci4int_bayes(p1_hybrid)[c(9,11,12),]%>% mutate(pattern = "Pattern 1")
+bayesp2_h = add_ci4int_bayes(p2_hybrid)[c(9,11:12),]%>% mutate(pattern = "Pattern 2")
+
+tabbayes_i = bind_rows(bayesp1_i, bayesp2_i)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
+            rename(term = beta, estimate = `50%`) %>% 
+            rename_all(~str_replace(., "%", " %")) %>% 
+            mutate(model = "Weakly informative")
+
+tabbayes_h = bind_rows(bayesp1_h, bayesp2_h)[,c(1,7, 5, 9:10)] %>% as_tibble() %>% 
+            rename(term = beta, estimate = `50%`) %>% 
+            rename_all(~str_replace(., "%", " %")) %>% 
+            mutate(model = "Weakly/non- informative")
+
+supp_table = bind_rows(tabbayes_i, tabbayes_h) %>% dplyr::select(model, pattern, everything()) %>% 
+  arrange(model, pattern, term) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  mutate(`95% Confidence Interval` = str_c("(", `2.5 %`, ", ", `97.5 %`, ")")) %>% 
+  mutate(term = case_when(term == "sex*p" | grepl("SEX", term) ~ " interaction term",
+                          TRUE ~ term),
+         term = str_remove(term, "(P1|P2|p)"),
+         term = str_c(pattern, term)) %>%  
+    dplyr::select(-`2.5 %`, -`97.5 %`, -pattern)
+
+supp_table
+
+# stargazer::stargazer(supp_table[,3:4], summary = F)
+```
