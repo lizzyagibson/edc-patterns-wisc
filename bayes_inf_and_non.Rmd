@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='
 
 options(mc.cores = parallel::detectCores())
 source("./packages.R")
-source("./read_data.R")
+# source("./read_data.R")
 ```
 
 ## Mothers & Newborns
@@ -27,72 +27,72 @@ source("./read_data.R")
 
 ```{r, dat}
 # UNSTANDARDIZED GAMMA*GAMMA
-alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
-beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
-
-alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
-beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
-
-bayes = bind_cols(ppp_cov, ewa, alpha_w, beta_w) %>% 
-        dplyr::select(-GEST, -ETH) %>% 
-        rename(HOME_SCORE = HOMETOT) %>% 
-        filter(P1 != max(P1)) %>%
-        filter(P1 != max(P1)) %>%  # removes two outliers
-        drop_na() %>% 
-        mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
-        mutate_if(is.character, as_factor)
-
-# For stan model ####
-N = nrow(bayes)
-C = 7 # number of covariates
-x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
-                 data = bayes)[,-1]
-sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
-y = bayes$WISC
-
-# Predictors of interest
-
-### Unscaled Gamma
-Walpha1 = bayes$walpha1
-# Wbeta1  = bayes$wbeta1 # want the scaled W beta
-
-Aalpha1 = alpha_a[[1]]
-Abeta1  = beta_a[[1]]
-
-Walpha2 = bayes$walpha2
-# Wbeta2 = bayes$wbeta2 # want scaled beta
-
-Aalpha2 = alpha_a[[2]]
-Abeta2  = beta_a[[2]]
-
-### Scaled and Standardized Gamma
-# don't scale alpha, only scale beta
-Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
-Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
+# alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
+# beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
+# 
+# alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
+# beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
+# 
+# bayes = bind_cols(ppp_cov, ewa, alpha_w, beta_w) %>% 
+#         dplyr::select(-GEST, -ETH) %>% 
+#         rename(HOME_SCORE = HOMETOT) %>% 
+#         filter(P1 != max(P1)) %>%
+#         filter(P1 != max(P1)) %>%  # removes two outliers
+#         drop_na() %>% 
+#         mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
+#         mutate_if(is.character, as_factor)
+# 
+# # For stan model ####
+# N = nrow(bayes)
+# C = 7 # number of covariates
+# x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
+#                  data = bayes)[,-1]
+# sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
+# y = bayes$WISC
+# 
+# # Predictors of interest
+# 
+# ### Unscaled Gamma
+# Walpha1 = bayes$walpha1
+# # Wbeta1  = bayes$wbeta1 # want the scaled W beta
+# 
+# Aalpha1 = alpha_a[[1]]
+# Abeta1  = beta_a[[1]]
+# 
+# Walpha2 = bayes$walpha2
+# # Wbeta2 = bayes$wbeta2 # want scaled beta
+# 
+# Aalpha2 = alpha_a[[2]]
+# Abeta2  = beta_a[[2]]
+# 
+# ### Scaled and Standardized Gamma
+# # don't scale alpha, only scale beta
+# Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
+# Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
 
 # don't scale a only scale W
 ```
 
 ```{r, standat}
-p1_dat = list(N = N,
-                  C = C,
-                  x = x,
-                  y = y,
-                  sex = sex,
-                  alpha_w = Walpha1,
-                  beta_w  = Wbeta1,
-                  alpha_a = Aalpha1,
-                  beta_a  = Abeta1)
-                  
-p2_dat = list(N = N,
-                  C = C,
-                  x = x,
-                  y = y,
-                  sex = sex,
-                  alpha_w = Walpha2,
-                  beta_w  = Wbeta2,
-                  alpha_a = Aalpha2,
-                  beta_a  = Abeta2)
+# p1_dat = list(N = N,
+#                   C = C,
+#                   x = x,
+#                   y = y,
+#                   sex = sex,
+#                   alpha_w = Walpha1,
+#                   beta_w  = Wbeta1,
+#                   alpha_a = Aalpha1,
+#                   beta_a  = Abeta1)
+#                   
+# p2_dat = list(N = N,
+#                   C = C,
+#                   x = x,
+#                   y = y,
+#                   sex = sex,
+#                   alpha_w = Walpha2,
+#                   beta_w  = Wbeta2,
+#                   alpha_a = Aalpha2,
+#                   beta_a  = Abeta2)
 ```
 
 ## Bayesian models
@@ -171,20 +171,7 @@ load("./Stan/fits/pattern2_hybrid.rda")
 ```{r}
 trace = c("beta_int", "beta_sex", "beta_p")
 
-traceplot(p1_non, pars = trace, inc_warmup = TRUE)
-color_scheme_set("mix-blue-pink")
-mcmc_trace(p1_non, pars = trace, n_warmup = 1000,
-                 facet_args = list(nrow = 3, labeller = label_parsed))
-
-traced <- stan_trace(p1_non, pars = trace, nrow = 3)
-traced
-
-traced +
-    scale_color_brewer(type = "div") +
-    theme(legend.position = "none")
-facet_style <- theme(strip.background = ggplot2::element_rect(fill = "white"),
-                       strip.text = ggplot2::element_text(size = 13, color = "black"))
-traced + facet_style
+stan_trace(p1_non, pars = trace, nrow = 3)
 ```
 
 ### Summary
@@ -267,21 +254,8 @@ mcmc_areas(p1non_coef,
                                   "with medians and 95% intervals") +
   scale_y_discrete(labels=c(
   "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-15,15))
-```
-
-```{r}
-ext_p1 <- extract(p1_non)
-p1non_coef = cbind(ext_p1$beta_int, ext_p1$beta_sex, ext_p1$beta_p) %>% 
-  as_tibble() %>% 
-  rename(int=1, sex=2, Males=3) %>% 
-             mutate(Females = Males + int) %>% 
-  dplyr::select(-sex, -int)
-
-mcmc_areas(p1non_coef,
-           prob = 0.95) + ggtitle("Posterior distributions",
-                                  "with medians and 95% intervals")
+  "p_male" = "P1 in males",
+  "p_female" = "P1 in females")) + xlim(c(-15,15))
 ```
 
 ##### Informative Pattern
@@ -298,8 +272,8 @@ mcmc_areas(p1i_coef,
                                   "with medians and 95% intervals") +
   scale_y_discrete(labels=c(
   "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-15,15))
+  "p_male" = "P1 in males",
+  "p_female" = "P1 in females")) + xlim(c(-15,15))
 ```
 
 ##### Informative Everything
@@ -316,8 +290,8 @@ mcmc_areas(p1i_coef_nc,
                                   "with medians and 95% intervals") +
   scale_y_discrete(labels=c(
   "int" = "Interaction", 
-  "p_male" = "P2 in males",
-  "p_female" = "P2 in females")) + xlim(c(-15,15))
+  "p_male" = "P1 in males",
+  "p_female" = "P1 in females")) + xlim(c(-15,15))
 ```
 
 #### Pattern 2
