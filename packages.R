@@ -7,10 +7,6 @@ list.of.packages <- c( "haven", "tidyverse", "RColorBrewer", "mgcv", "janitor", 
                        "ggridges", "bayestestR", "olsrr", "mvoutlier", "outliers", "EnvStats", "finalfit",  
                        "mice", "VIM")
 
-# this is a local data package
-# Robbie: do I need this?
-library(MNdata) 
-
 # if these aren't installed, install them
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
