@@ -317,6 +317,19 @@ fit_p2 <- lm(WISC ~ P2 + SEX + SEX*P2, data = mn)
 add_ci4interaction(fit_p2, "P2", "P2:SEXFemale")
 ```
 
+```{r}
+p2_non <- gam(WISC ~ s(P2, by = SEX), data = mn)
+summary(p2_non)
+par(mfrow = c(1,2))
+plot(p2_non)
+par(mfrow = c(1,1))
+```
+
+```{r}
+mn %>% 
+  ggplot(aes(x = P2, y = WISC, color = SEX)) + geom_point() + geom_smooth()
+```
+
 ### Adjusted
 
 #### Pattern 1

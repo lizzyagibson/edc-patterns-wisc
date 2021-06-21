@@ -4,6 +4,7 @@ source("./read_data.R")
 library(gridExtra)
 library(gtable)
 library(grid)
+library(ggpubr)
 library(cowplot)
 
 names = colnames(mn_ppp[,-1]) %>% 
@@ -158,7 +159,7 @@ nolegend = modplot %>%
                 width = 0.25, size = 1.5) +
   geom_point(position = position_dodge(width = .5), size = 4) +
   labs(y = "Beta coefficient with \n95% confidence intervals",
-       x = "BN2MF-identified patterns") +
+       x = expression(paste("B", N^2, "MF-identified patterns"))) +
   theme(axis.text.x = element_text(angle=0, hjust=0.5),
         legend.position = "none") +
   scale_color_manual(values = c("#E18727", "#1976D2"))
@@ -168,8 +169,8 @@ ggdraw(nolegend) +
   draw_plot(sexlegend, x=.4, y=-0.3) +
   draw_plot(modellegend, x=.165, y=-0.3)
 
-#pdf("./Figures/modelplot.pdf", height=5)
+pdf("./Figures/modelplot.pdf", height=5)
 ggdraw(nolegend) +
-  draw_plot(sexlegend, x=.375, y=-0.24) +
-  draw_plot(modellegend, x=.185, y=-0.24)
-#dev.off()
+  draw_plot(sexlegend, x=.375, y=-0.22) +
+  draw_plot(modellegend, x=.185, y=-0.22)
+dev.off()
