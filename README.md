@@ -8,7 +8,8 @@ Patterns of phthalates, phenols, and parabens measured in pregnant women in Moth
 ### sourced from other scripts
 
 1. `packages.R` has all the packages used and a few functions I wrote.  
-2. `read_data.R` reads in the data. :)
+2. `read_data.R` reads in the data.
+  * Since you cannot read in the data, you can only run the Bayesian script.
 
 ### analysis 
 
