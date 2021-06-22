@@ -25,12 +25,16 @@ source("./source/read_data.R")
 
 ```{r, demo}
 # Ran BN2MF on this subset
+# Robbie: Is this because some mothers did not have chemical measurements in the pattern identification step?
 ppp_343 = left_join(ppp_cov, mn_outcome) %>% mutate(Subsample = "BN2MF Subsample") %>% rename(HOME_SCORE = HOMETOT)
 
 # this subset had WISC measured
+# Robbie: And is this because some children did not have WISC scores?
 ppp_311 = ppp_343 %>% filter(!is.na(WISC)) %>% mutate(Subsample = "WISC Subsample")
 
 # this subset had all covariates measured
+# Robbie: Assuming this is a subset with all covariates included (feels pretty self-explanatory) 
+# Robbie: Were the ones excluded here the 22 that you mentioned as missing covariate data in the manuscript?
 ppp_289 = ppp_311 %>% filter(!is.na(M_IQ) & !is.na(HOME_SCORE)) %>% mutate(Subsample = "Complete Cases")
 
 # whole cohort is 727 mothers
