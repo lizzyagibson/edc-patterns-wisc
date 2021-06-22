@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align='
 
 options(mc.cores = parallel::detectCores())
 source("./source/packages.R")
-source("./source/read_data.R")
+# source("./source/read_data.R")
 ```
 
 ## Mothers & Newborns
