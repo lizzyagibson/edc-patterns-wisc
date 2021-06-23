@@ -62,7 +62,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %>%
 ```
 
 ## Table 1
-
+# Robbie : Is the Subsample stuff (which is just here and not in the paper) in order to check that the subsample for the table is correct?
 ```{r one}
 demo %>%  
   filter(Subsample == "BN2MF Subsample") %>% 
@@ -130,7 +130,7 @@ conc = mn_ppp %>% # get summary stats for concentrations
   pivot_longer(MEHHP:BPA,
                names_to = "Chemical") %>% 
   group_by(Chemical) %>% 
-  summarise(Mean = mean(value, na.rm = TRUE),
+  summarise(Mean = mean(value, na.rm = TRUE), # Robbie: Do the na.rm for each of these stats means that those <LOD values are not included in the calculation?
             Stdev = sd(value, na.rm = TRUE),
             Min = min(value, na.rm = TRUE),
             qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),
