@@ -288,12 +288,19 @@ source(&quot;./source/read_data.R&quot;)</code></pre>
 <div id="demographics" class="section level2">
 <h2>Demographics</h2>
 <pre class="r"><code># Ran BN2MF on this subset
+# Robbie: Is this because some mothers did not have chemical measurements in the pattern identification step?
+# Lizzy: Yes, the entire Mothers&amp;Newborns cohort is 727, and 343 had both phenols and phthalates measured in urine
 ppp_343 = left_join(ppp_cov, mn_outcome) %&gt;% mutate(Subsample = &quot;BN2MF Subsample&quot;) %&gt;% rename(HOME_SCORE = HOMETOT)
 
 # this subset had WISC measured
+# Robbie: And is this because some children did not have WISC scores?
+# Lizzy: Correct!
 ppp_311 = ppp_343 %&gt;% filter(!is.na(WISC)) %&gt;% mutate(Subsample = &quot;WISC Subsample&quot;)
 
 # this subset had all covariates measured
+# Robbie: Assuming this is a subset with all covariates included (feels pretty self-explanatory) 
+# Robbie: Were the ones excluded here the 22 that you mentioned as missing covariate data in the manuscript?
+# Lizzy: Yes, exactly. We went from 727 to 343 with EDCs measured, to 311 with EDCs + WISC measured, to 289 with EDCs + WISC + all covariates, and these are not missing completely at random, but in the sensitivity.rmd file, I look at the data to make sure that the missingness doesn&#39;t depend on any measured variables, and it doesn&#39;t.
 ppp_289 = ppp_311 %&gt;% filter(!is.na(M_IQ) &amp; !is.na(HOME_SCORE)) %&gt;% mutate(Subsample = &quot;Complete Cases&quot;)
 
 # whole cohort is 727 mothers
@@ -321,7 +328,10 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
 </div>
 <div id="table-1" class="section level2">
 <h2>Table 1</h2>
-<pre class="r"><code>demo %&gt;%  
+<pre class="r"><code># Robbie : Is the Subsample stuff (which is just here and not in the paper) in order to check that the subsample for the table is correct?
+# Lizzy: The &#39;BN2MF subsample&#39; is the main analysis in the paper, the table in the next chunk separates each nested group (727, 343, 311, and 289) to show that there are no significant differences in demographics between any other the groups. this isn&#39;t in the main paper, but it is in the supplemental materials.
+
+demo %&gt;%  
   filter(Subsample == &quot;BN2MF Subsample&quot;) %&gt;% 
   tbl_summary(missing = &quot;no&quot;,
               statistic = list(all_continuous() ~ &quot;{mean} ({sd})&quot;)) %&gt;% 
@@ -331,7 +341,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
 
-#fstopeewjp .gt_table {
+#zofbzwkuun .gt_table {
   display: table;
   border-collapse: collapse;
   margin-left: auto;
@@ -356,7 +366,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-left-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_heading {
+#zofbzwkuun .gt_heading {
   background-color: #FFFFFF;
   text-align: center;
   border-bottom-color: #FFFFFF;
@@ -368,7 +378,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_title {
+#zofbzwkuun .gt_title {
   color: #333333;
   font-size: 125%;
   font-weight: initial;
@@ -378,7 +388,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-bottom-width: 0;
 }
 
-#fstopeewjp .gt_subtitle {
+#zofbzwkuun .gt_subtitle {
   color: #333333;
   font-size: 85%;
   font-weight: initial;
@@ -388,13 +398,13 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-top-width: 0;
 }
 
-#fstopeewjp .gt_bottom_border {
+#zofbzwkuun .gt_bottom_border {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_col_headings {
+#zofbzwkuun .gt_col_headings {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -409,7 +419,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_col_heading {
+#zofbzwkuun .gt_col_heading {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -429,7 +439,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   overflow-x: hidden;
 }
 
-#fstopeewjp .gt_column_spanner_outer {
+#zofbzwkuun .gt_column_spanner_outer {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -441,15 +451,15 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-right: 4px;
 }
 
-#fstopeewjp .gt_column_spanner_outer:first-child {
+#zofbzwkuun .gt_column_spanner_outer:first-child {
   padding-left: 0;
 }
 
-#fstopeewjp .gt_column_spanner_outer:last-child {
+#zofbzwkuun .gt_column_spanner_outer:last-child {
   padding-right: 0;
 }
 
-#fstopeewjp .gt_column_spanner {
+#zofbzwkuun .gt_column_spanner {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
@@ -461,7 +471,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   width: 100%;
 }
 
-#fstopeewjp .gt_group_heading {
+#zofbzwkuun .gt_group_heading {
   padding: 8px;
   color: #333333;
   background-color: #FFFFFF;
@@ -483,7 +493,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   vertical-align: middle;
 }
 
-#fstopeewjp .gt_empty_group_heading {
+#zofbzwkuun .gt_empty_group_heading {
   padding: 0.5px;
   color: #333333;
   background-color: #FFFFFF;
@@ -498,15 +508,15 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   vertical-align: middle;
 }
 
-#fstopeewjp .gt_from_md > :first-child {
+#zofbzwkuun .gt_from_md > :first-child {
   margin-top: 0;
 }
 
-#fstopeewjp .gt_from_md > :last-child {
+#zofbzwkuun .gt_from_md > :last-child {
   margin-bottom: 0;
 }
 
-#fstopeewjp .gt_row {
+#zofbzwkuun .gt_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -525,7 +535,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   overflow-x: hidden;
 }
 
-#fstopeewjp .gt_stub {
+#zofbzwkuun .gt_stub {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -537,7 +547,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-left: 12px;
 }
 
-#fstopeewjp .gt_summary_row {
+#zofbzwkuun .gt_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -547,7 +557,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-right: 5px;
 }
 
-#fstopeewjp .gt_first_summary_row {
+#zofbzwkuun .gt_first_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -557,7 +567,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-top-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_grand_summary_row {
+#zofbzwkuun .gt_grand_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -567,7 +577,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-right: 5px;
 }
 
-#fstopeewjp .gt_first_grand_summary_row {
+#zofbzwkuun .gt_first_grand_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -577,11 +587,11 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-top-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_striped {
+#zofbzwkuun .gt_striped {
   background-color: rgba(128, 128, 128, 0.05);
 }
 
-#fstopeewjp .gt_table_body {
+#zofbzwkuun .gt_table_body {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -590,7 +600,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-bottom-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_footnotes {
+#zofbzwkuun .gt_footnotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -604,13 +614,13 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_footnote {
+#zofbzwkuun .gt_footnote {
   margin: 0px;
   font-size: 90%;
   padding: 4px;
 }
 
-#fstopeewjp .gt_sourcenotes {
+#zofbzwkuun .gt_sourcenotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -624,46 +634,46 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#fstopeewjp .gt_sourcenote {
+#zofbzwkuun .gt_sourcenote {
   font-size: 90%;
   padding: 4px;
 }
 
-#fstopeewjp .gt_left {
+#zofbzwkuun .gt_left {
   text-align: left;
 }
 
-#fstopeewjp .gt_center {
+#zofbzwkuun .gt_center {
   text-align: center;
 }
 
-#fstopeewjp .gt_right {
+#zofbzwkuun .gt_right {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-#fstopeewjp .gt_font_normal {
+#zofbzwkuun .gt_font_normal {
   font-weight: normal;
 }
 
-#fstopeewjp .gt_font_bold {
+#zofbzwkuun .gt_font_bold {
   font-weight: bold;
 }
 
-#fstopeewjp .gt_font_italic {
+#zofbzwkuun .gt_font_italic {
   font-style: italic;
 }
 
-#fstopeewjp .gt_super {
+#zofbzwkuun .gt_super {
   font-size: 65%;
 }
 
-#fstopeewjp .gt_footnote_marks {
+#zofbzwkuun .gt_footnote_marks {
   font-style: italic;
   font-size: 65%;
 }
 </style>
-<div id="fstopeewjp" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+<div id="zofbzwkuun" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
   <thead class="gt_header">
     <tr>
       <th colspan="2" class="gt_heading gt_title gt_font_normal" style>Subject demographics and distribution of potential confounders, model covariates, and outcome variable</th>
@@ -808,7 +818,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
 
-#pfctdwhkyr .gt_table {
+#gqchtbmjcc .gt_table {
   display: table;
   border-collapse: collapse;
   margin-left: auto;
@@ -833,7 +843,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-left-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_heading {
+#gqchtbmjcc .gt_heading {
   background-color: #FFFFFF;
   text-align: center;
   border-bottom-color: #FFFFFF;
@@ -845,7 +855,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_title {
+#gqchtbmjcc .gt_title {
   color: #333333;
   font-size: 125%;
   font-weight: initial;
@@ -855,7 +865,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-bottom-width: 0;
 }
 
-#pfctdwhkyr .gt_subtitle {
+#gqchtbmjcc .gt_subtitle {
   color: #333333;
   font-size: 85%;
   font-weight: initial;
@@ -865,13 +875,13 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-top-width: 0;
 }
 
-#pfctdwhkyr .gt_bottom_border {
+#gqchtbmjcc .gt_bottom_border {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_col_headings {
+#gqchtbmjcc .gt_col_headings {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -886,7 +896,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_col_heading {
+#gqchtbmjcc .gt_col_heading {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -906,7 +916,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   overflow-x: hidden;
 }
 
-#pfctdwhkyr .gt_column_spanner_outer {
+#gqchtbmjcc .gt_column_spanner_outer {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -918,15 +928,15 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-right: 4px;
 }
 
-#pfctdwhkyr .gt_column_spanner_outer:first-child {
+#gqchtbmjcc .gt_column_spanner_outer:first-child {
   padding-left: 0;
 }
 
-#pfctdwhkyr .gt_column_spanner_outer:last-child {
+#gqchtbmjcc .gt_column_spanner_outer:last-child {
   padding-right: 0;
 }
 
-#pfctdwhkyr .gt_column_spanner {
+#gqchtbmjcc .gt_column_spanner {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
@@ -938,7 +948,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   width: 100%;
 }
 
-#pfctdwhkyr .gt_group_heading {
+#gqchtbmjcc .gt_group_heading {
   padding: 8px;
   color: #333333;
   background-color: #FFFFFF;
@@ -960,7 +970,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   vertical-align: middle;
 }
 
-#pfctdwhkyr .gt_empty_group_heading {
+#gqchtbmjcc .gt_empty_group_heading {
   padding: 0.5px;
   color: #333333;
   background-color: #FFFFFF;
@@ -975,15 +985,15 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   vertical-align: middle;
 }
 
-#pfctdwhkyr .gt_from_md > :first-child {
+#gqchtbmjcc .gt_from_md > :first-child {
   margin-top: 0;
 }
 
-#pfctdwhkyr .gt_from_md > :last-child {
+#gqchtbmjcc .gt_from_md > :last-child {
   margin-bottom: 0;
 }
 
-#pfctdwhkyr .gt_row {
+#gqchtbmjcc .gt_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -1002,7 +1012,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   overflow-x: hidden;
 }
 
-#pfctdwhkyr .gt_stub {
+#gqchtbmjcc .gt_stub {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -1014,7 +1024,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-left: 12px;
 }
 
-#pfctdwhkyr .gt_summary_row {
+#gqchtbmjcc .gt_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -1024,7 +1034,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-right: 5px;
 }
 
-#pfctdwhkyr .gt_first_summary_row {
+#gqchtbmjcc .gt_first_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -1034,7 +1044,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-top-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_grand_summary_row {
+#gqchtbmjcc .gt_grand_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -1044,7 +1054,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   padding-right: 5px;
 }
 
-#pfctdwhkyr .gt_first_grand_summary_row {
+#gqchtbmjcc .gt_first_grand_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -1054,11 +1064,11 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-top-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_striped {
+#gqchtbmjcc .gt_striped {
   background-color: rgba(128, 128, 128, 0.05);
 }
 
-#pfctdwhkyr .gt_table_body {
+#gqchtbmjcc .gt_table_body {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -1067,7 +1077,7 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-bottom-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_footnotes {
+#gqchtbmjcc .gt_footnotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -1081,13 +1091,13 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_footnote {
+#gqchtbmjcc .gt_footnote {
   margin: 0px;
   font-size: 90%;
   padding: 4px;
 }
 
-#pfctdwhkyr .gt_sourcenotes {
+#gqchtbmjcc .gt_sourcenotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -1101,46 +1111,46 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %&gt;%
   border-right-color: #D3D3D3;
 }
 
-#pfctdwhkyr .gt_sourcenote {
+#gqchtbmjcc .gt_sourcenote {
   font-size: 90%;
   padding: 4px;
 }
 
-#pfctdwhkyr .gt_left {
+#gqchtbmjcc .gt_left {
   text-align: left;
 }
 
-#pfctdwhkyr .gt_center {
+#gqchtbmjcc .gt_center {
   text-align: center;
 }
 
-#pfctdwhkyr .gt_right {
+#gqchtbmjcc .gt_right {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-#pfctdwhkyr .gt_font_normal {
+#gqchtbmjcc .gt_font_normal {
   font-weight: normal;
 }
 
-#pfctdwhkyr .gt_font_bold {
+#gqchtbmjcc .gt_font_bold {
   font-weight: bold;
 }
 
-#pfctdwhkyr .gt_font_italic {
+#gqchtbmjcc .gt_font_italic {
   font-style: italic;
 }
 
-#pfctdwhkyr .gt_super {
+#gqchtbmjcc .gt_super {
   font-size: 65%;
 }
 
-#pfctdwhkyr .gt_footnote_marks {
+#gqchtbmjcc .gt_footnote_marks {
   font-style: italic;
   font-size: 65%;
 }
 </style>
-<div id="pfctdwhkyr" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+<div id="gqchtbmjcc" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
   
   <thead class="gt_col_headings">
     <tr>
@@ -1373,7 +1383,9 @@ conc = mn_ppp %&gt;% # get summary stats for concentrations
   pivot_longer(MEHHP:BPA,
                names_to = &quot;Chemical&quot;) %&gt;% 
   group_by(Chemical) %&gt;% 
-  summarise(Mean = mean(value, na.rm = TRUE),
+  summarise(Mean = mean(value, na.rm = TRUE), 
+            # Robbie: Do the na.rm for each of these stats means that those &lt;LOD values are not included in the calculation?
+            # Lizzy: No, values &lt;LOD were already imputed as LOD/sqrt(2). `na.rm` here doesn&#39;t actually do anything because there are no missing values (see added line below, line 150)
             Stdev = sd(value, na.rm = TRUE),
             Min = min(value, na.rm = TRUE),
             qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c(&quot;Q25&quot;, &quot;Median&quot;, &quot;Q75&quot;),
@@ -1382,7 +1394,9 @@ conc = mn_ppp %&gt;% # get summary stats for concentrations
               values_from = &quot;qs&quot;) %&gt;% 
   dplyr::select(Chemical:Min, Q25:Q75, Max)
 
-ppp_table &lt;- left_join(detected, conc, by = c(&quot;Chemical&quot;)) %&gt;% 
+any(is.na(mn_ppp)) ## LINE 150</code></pre>
+<pre><code>## [1] FALSE</code></pre>
+<pre class="r"><code>ppp_table &lt;- left_join(detected, conc, by = c(&quot;Chemical&quot;)) %&gt;% 
   # combine concentrations and detection into table
   mutate(`% &lt;LOD` = `% &lt;LOD` * 100) %&gt;% 
   mutate_if(is.numeric, round, digits = 4) %&gt;% 

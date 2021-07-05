@@ -101,6 +101,7 @@ source("./source/packages.R")
 * need to change informative and hybrid
 # Robbie: Are these the models whose output I can actually see with the data in the fits.zip Stan output? ...
 # Robbie: https://github.com/lizzyagibson/edc-patterns-wisc/releases/tag/v1.0-beta
+# Lizzy: Yes!
 
 ```{r}
 # p1_non <- stan(
