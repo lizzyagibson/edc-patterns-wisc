@@ -21,6 +21,7 @@ Patterns of phthalates, phenols, and parabens measured in pregnant women in Moth
   * this calls Stan files
   * You can run this file with the Stan model fits.
   * HTML version included.
+  # Robbie: I have now looked at this script
 3. `sensitivity.Rmd` makes the supplemental figure for the sensitivity analysis.
   * You cannot run this file.
   * HTML version included.
