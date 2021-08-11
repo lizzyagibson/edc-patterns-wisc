@@ -17,7 +17,7 @@ data {
 
 // The parameters accepted by the model.
 parameters {
-  real<lower=0> alpha;     // intercept
+  real<lower=0> alpha;     // intercept // Robbie: Won't affect analysis but called beta in the manuscript
   real<lower=0> sigma;     // error scale
   
   vector[C] beta_c;    // coefficients for covariates
@@ -26,7 +26,7 @@ parameters {
   real beta_p;         // coefficients for patterns
   
   vector<lower=0>[N] W;  // pattern scores with uncertainty
-  real<lower=0> a;  // pattern scores with uncertainty
+  real<lower=0> a;  // pattern scores with uncertainty // Robbie: Is this the sparse vector a in the manuscript? If so perhaps make a bit more clear here?
 }
 
 // interaction term here
@@ -37,7 +37,7 @@ transformed parameters {
     vector<lower=0>[N] WA; // Wa drawn from distribution
     vector<lower=0>[N] inter; // pattern score * sex
     WA    = W * a;
-    inter = WA .* sex;
+    inter = WA .* sex; // Robbie: What does the '.' in front of the '*' mean sorry? I understand (I think) that this is the interaction term between sex and individual pattern score.
 }
 
 // The model to be estimated.
@@ -48,7 +48,7 @@ model {
       W[n] ~ gamma(alpha_w[n], beta_w[n]);
   }
   
-  a ~ gamma(alpha_a, beta_a); // single a distribution, all W are multiplied by this
+  a ~ gamma(alpha_a, beta_a); // single a distribution, all W are multiplied by this // Robbie: See above. This is the sparse matrix to penalise larger number of patterns correct?
     
   y ~ normal(((WA * beta_p) + (inter * beta_int) + 
               (sex * beta_sex) + (x * beta_c) + alpha), sigma);  // likelihood
