@@ -25,8 +25,10 @@ parameters {
   real beta_sex;       // coefficient for sex
   real beta_p;         // coefficients for patterns
   
-  vector<lower=0>[N] W;  // pattern scores with uncertainty
-  real<lower=0> a;  // pattern scores with uncertainty // Robbie: Is this the sparse vector a in the manuscript? If so perhaps make a bit more clear here?
+  vector<lower=0>[N] W;  // pattern scores (unscaled) with uncertainty
+  real<lower=0> a;       // individual value of sparse vector (with uncertainty) to scale scores
+  // Robbie: Is this the sparse vector a in the manuscript? If so perhaps make a bit more clear here?
+  // Lizzy: Yes!
 }
 
 // interaction term here
@@ -37,7 +39,13 @@ transformed parameters {
     vector<lower=0>[N] WA; // Wa drawn from distribution
     vector<lower=0>[N] inter; // pattern score * sex
     WA    = W * a;
-    inter = WA .* sex; // Robbie: What does the '.' in front of the '*' mean sorry? I understand (I think) that this is the interaction term between sex and individual pattern score.
+    inter = WA .* sex; 
+    // Robbie: What does the '.' in front of the '*' mean sorry? I understand (I think) that this is the interaction term between 
+    // sex and individual pattern score.
+    // Lizzy: .* makes it element-wise multiplication. For W * a, a is a scalar value (single number), so W * a multiplies every value
+    // in the W vector by a.
+    // For WA .* sex, WA and sex are both vectors, so WA * sex would give vector multiplication, which we don't want.
+    // WA .* sex gives each individual's WA value times sex, which is what we want for the interaction term.
 }
 
 // The model to be estimated.
@@ -48,8 +56,10 @@ model {
       W[n] ~ gamma(alpha_w[n], beta_w[n]);
   }
   
-  a ~ gamma(alpha_a, beta_a); // single a distribution, all W are multiplied by this // Robbie: See above. This is the sparse matrix to penalise larger number of patterns correct?
-    
+  a ~ gamma(alpha_a, beta_a); // single a distribution, all W are multiplied by this 
+  // distribution for individual value of sparse vector (with uncertainty) to scale scores  
+  // Robbie: See above. This is the sparse matrix to penalise larger number of patterns correct?
+  // Lizzy: Yes!
   y ~ normal(((WA * beta_p) + (inter * beta_int) + 
               (sex * beta_sex) + (x * beta_c) + alpha), sigma);  // likelihood
 }
