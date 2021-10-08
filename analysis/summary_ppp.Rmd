@@ -25,19 +25,12 @@ source("./source/read_data.R")
 
 ```{r, demo}
 # Ran BN2MF on this subset
-# Robbie: Is this because some mothers did not have chemical measurements in the pattern identification step?
-# Lizzy: Yes, the entire Mothers&Newborns cohort is 727, and 343 had both phenols and phthalates measured in urine
 ppp_343 = left_join(ppp_cov, mn_outcome) %>% mutate(Subsample = "BN2MF Subsample") %>% rename(HOME_SCORE = HOMETOT)
 
 # this subset had WISC measured
-# Robbie: And is this because some children did not have WISC scores?
-# Lizzy: Correct!
 ppp_311 = ppp_343 %>% filter(!is.na(WISC)) %>% mutate(Subsample = "WISC Subsample")
 
 # this subset had all covariates measured
-# Robbie: Assuming this is a subset with all covariates included (feels pretty self-explanatory) 
-# Robbie: Were the ones excluded here the 22 that you mentioned as missing covariate data in the manuscript?
-# Lizzy: Yes, exactly. We went from 727 to 343 with EDCs measured, to 311 with EDCs + WISC measured, to 289 with EDCs + WISC + all covariates, and these are not missing completely at random, but in the sensitivity.rmd file, I look at the data to make sure that the missingness doesn't depend on any measured variables, and it doesn't.
 ppp_289 = ppp_311 %>% filter(!is.na(M_IQ) & !is.na(HOME_SCORE)) %>% mutate(Subsample = "Complete Cases")
 
 # whole cohort is 727 mothers
@@ -67,9 +60,6 @@ demo =  bind_rows(cohort, ppp_343, ppp_311, ppp_289) %>%
 ## Table 1
 
 ```{r one}
-# Robbie : Is the Subsample stuff (which is just here and not in the paper) in order to check that the subsample for the table is correct?
-# Lizzy: The 'BN2MF subsample' is the main analysis in the paper, the table in the next chunk separates each nested group (727, 343, 311, and 289) to show that there are no significant differences in demographics between any other the groups. this isn't in the main paper, but it is in the supplemental materials.
-
 demo %>%  
   filter(Subsample == "BN2MF Subsample") %>% 
   tbl_summary(missing = "no",
@@ -137,8 +127,6 @@ conc = mn_ppp %>% # get summary stats for concentrations
                names_to = "Chemical") %>% 
   group_by(Chemical) %>% 
   summarise(Mean = mean(value, na.rm = TRUE), 
-            # Robbie: Do the na.rm for each of these stats means that those <LOD values are not included in the calculation?
-            # Lizzy: No, values <LOD were already imputed as LOD/sqrt(2). `na.rm` here doesn't actually do anything because there are no missing values (see added line below, line 150)
             Stdev = sd(value, na.rm = TRUE),
             Min = min(value, na.rm = TRUE),
             qs = quantile(value, c(0.25, 0.5, 0.75), na.rm = TRUE), prob = c("Q25", "Median", "Q75"),

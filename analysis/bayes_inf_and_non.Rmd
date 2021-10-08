@@ -26,12 +26,6 @@ source("./source/packages.R")
 * 9 phthalates  
 
 ```{r, dat}
-# Robbie: Perhaps one time we can go through this section on Zoom in a live session? I am finding it difficult to interpret abstractly... particularly what the results of model.matrix look like
-# Lizzy: sure thing!
-
-# Robbie: Is the following (alpha_w, beta_w, alpha_a), beta_a) derived from a step with BN2MF?
-# Lizzy: Yes, BN2MF outputs Gamma dist alpha and beta for all three solution matrices, W, a, and H
-
 # UNSTANDARDIZED GAMMA*GAMMA
 # alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
 # beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
@@ -82,8 +76,6 @@ source("./source/packages.R")
 ```
 
 ```{r, standat}
-# Robbie: So Stan always takes in a list for input data?
-# Lizzy: Yes! At least, the R-Stan interface does it that way.
 # p1_dat = list(N = N,
 #                   C = C,
 #                   x = x,
@@ -108,9 +100,6 @@ source("./source/packages.R")
 ## Bayesian models
 
 * this is only non-informative models
-# Robbie: It looks like all the models are here. Is the second point above needed?
-# Lizzy: Deleted!
-
 ```{r}
 # p1_non <- stan(
 #   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
