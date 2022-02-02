@@ -26,65 +26,51 @@ source("./source/packages.R")
 * 9 phthalates  
 
 ```{r, dat}
-# Robbie: Perhaps one time we can go through this section on Zoom in a live session? I am finding it difficult to interpret abstractly... particularly what the results of model.matrix look like
-# Lizzy: sure thing!
-
-# Robbie: Is the following (alpha_w, beta_w, alpha_a), beta_a) derived from a step with BN2MF?
-# Lizzy: Yes, BN2MF outputs Gamma dist alpha and beta for all three solution matrices, W, a, and H
-
 # UNSTANDARDIZED GAMMA*GAMMA
-alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
-beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
-
-alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
-beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
-
-bayes = bind_cols(ppp_cov, ewa, alpha_w, beta_w) %>%
-        dplyr::select(-GEST, -ETH) %>%
-        rename(HOME_SCORE = HOMETOT) %>%
-        filter(P1 != max(P1)) %>%
-        filter(P1 != max(P1)) %>%  # removes two outliers
-        drop_na() %>%
-        mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>%
-        mutate_if(is.character, as_factor)
-
+# alpha_w <- readMat(here::here("./Data/mn2_Walpha.mat"))[[1]] %>% as_tibble() %>% rename(walpha1 = V1, walpha2 = V2)
+# beta_w <- readMat(here::here("./Data/mn2_Wbeta.mat"))[[1]] %>% as_tibble() %>% rename(wbeta1 = V1, wbeta2 = V2)
+# 
+# alpha_a <- readMat(here::here("./Data/mn2_Aalpha.mat"))[[1]] %>% as_tibble() %>% rename(aalpha1 = V1, aalpha2 = V2)
+# beta_a <- readMat(here::here("./Data/mn2_Abeta.mat"))[[1]] %>% as_tibble() %>% rename(abeta1 = V1, abeta2 = V2)
+# 
+# bayes = bind_cols(ppp_cov, ewa, alpha_w, beta_w) %>% 
+#         dplyr::select(-GEST, -ETH) %>% 
+#         rename(HOME_SCORE = HOMETOT) %>% 
+#         filter(P1 != max(P1)) %>%
+#         filter(P1 != max(P1)) %>%  # removes two outliers
+#         drop_na() %>% 
+#         mutate_at(vars(c(HOME_SCORE, M_AGE, M_IQ)), scale) %>% 
+#         mutate_if(is.character, as_factor)
+# 
 # # For stan model ####
-N = nrow(bayes)
-C = 7 # number of covariates
-x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard,
-                 data = bayes)[,-1]
-head(x)
+# N = nrow(bayes)
+# C = 7 # number of covariates
+# x = model.matrix(WISC ~ M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
+#                  data = bayes)[,-1]
 # Lizzy: model.matrix basically makes dummies (if applicable) and creates a matrix of the included covariates
 # [,-1] at the end gets rid of the intercept value that model.matrix creates
-sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
-y = bayes$WISC
-
+# sex = model.matrix(WISC ~ SEX, data = bayes)[,-1]
+# y = bayes$WISC
+# 
 # # Predictors of interest
-
+# 
 # ### Unscaled Gamma
-Walpha1 = bayes$walpha1
-
-Aalpha1 = alpha_a[[1]]
-Abeta1  = beta_a[[1]]
-
-Walpha2 = bayes$walpha2
-
-Aalpha2 = alpha_a[[2]]
-Abeta2  = beta_a[[2]]
-
-### Scaled and Standardized Gamma dist for W
-# for a Gamma distribution, cX ~ Gamma(alpha, beta/c)
-# don't scale alpha, only scale beta
-# 1. Scale W Gamma distribution by multiplying the distribution by the normalization constant used to normalize H loadings (ie make them sum to 1)
-## this is the 17.#### number
-## It came from the MATLAB output
-# 2. Next scale W to have standard deviation = 1
-## standard deviation of EWA = 4.4074 for pattern 1 and 3.3636 for pattern 2 (after first scaling)
-## it also came from MATLAB output
-## X/c ~ Gamma(alpha, beta*c)
-
-Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
-Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
+# Walpha1 = bayes$walpha1
+# # Wbeta1  = bayes$wbeta1 # want the scaled W beta
+# 
+# Aalpha1 = alpha_a[[1]]
+# Abeta1  = beta_a[[1]]
+# 
+# Walpha2 = bayes$walpha2
+# # Wbeta2 = bayes$wbeta2 # want scaled beta
+# 
+# Aalpha2 = alpha_a[[2]]
+# Abeta2  = beta_a[[2]]
+# 
+# ### Scaled and Standardized Gamma
+# # don't scale alpha, only scale beta
+# Wbeta1  = (bayes$wbeta1/17.3043)*4.4074
+# Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
 
 # don't scale a only scale W
 ```
@@ -108,51 +94,48 @@ both_dat = list(N = N,
                 alpha_a_2 = Aalpha2,
                 beta_a_2  = Abeta2)
 
-p1_dat = list(N = N,
-                  C = C,
-                  x = x,
-                  y = y,
-                  sex = sex,
-                  alpha_w = Walpha1,
-                  beta_w  = Wbeta1,
-                  alpha_a = Aalpha1,
-                  beta_a  = Abeta1)
-
-p2_dat = list(N = N,
-                  C = C,
-                  x = x,
-                  y = y,
-                  sex = sex,
-                  alpha_w = Walpha2,
-                  beta_w  = Wbeta2,
-                  alpha_a = Aalpha2,
-                  beta_a  = Abeta2)
+# p1_dat = list(N = N,
+#                   C = C,
+#                   x = x,
+#                   y = y,
+#                   sex = sex,
+#                   alpha_w = Walpha1,
+#                   beta_w  = Wbeta1,
+#                   alpha_a = Aalpha1,
+#                   beta_a  = Abeta1)
+#                   
+# p2_dat = list(N = N,
+#                   C = C,
+#                   x = x,
+#                   y = y,
+#                   sex = sex,
+#                   alpha_w = Walpha2,
+#                   beta_w  = Wbeta2,
+#                   alpha_a = Aalpha2,
+#                   beta_a  = Abeta2)
 ```
 
 ## Bayesian models
 
 * this is only non-informative models
-# Robbie: It looks like all the models are here. Is the second point above needed?
-# Lizzy: Deleted!
-
 ```{r}
-p1_non <- stan(
-  file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
-    data = p1_dat,               # named list of data
-    chains = 4,                   # number of Markov chains
-    warmup = 1000,                # number of warmup iterations per chain
-    iter = 5000,                  # total number of iterations per chain
-    cores = 2)                    # number of cores
+# p1_non <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+#     data = p1_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
 # save(p1_non, file = "./Stan/fits/pattern1_non.rda")
- 
-p2_non <- stan(
-  file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
-    data = p2_dat,               # named list of data
-    chains = 4,                   # number of Markov chains
-    warmup = 1000,                # number of warmup iterations per chain
-    iter = 5000,                  # total number of iterations per chain
-    cores = 2)                    # number of cores
- # save(p2_non, file = "./Stan/fits/pattern2_non.rda")
+# 
+# p2_non <- stan(
+#   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
+#     data = p2_dat,               # named list of data
+#     chains = 4,                   # number of Markov chains
+#     warmup = 1000,                # number of warmup iterations per chain
+#     iter = 5000,                  # total number of iterations per chain
+#     cores = 2)                    # number of cores
+# save(p2_non, file = "./Stan/fits/pattern2_non.rda")
 
 # p1_inf <- stan(
 #   file = "./Stan/models/bn2mf_score_reg_int_infp1.stan",  # Stan program
