@@ -334,7 +334,18 @@ add_ci4interaction(fit_p2a, "P2", "P2:SEXFemale")
 glance(fit_p2a)[,-c(11:12)]
 ```
 
-## Table 3
+#### Both patterns
+
+```{r}
+fit_both <- lm(WISC ~ P1 + SEX*P1 + P2 + SEX*P2 + SEX + M_IQ + ALCOHOL + M_EDU + M_AGE +
+              MARITAL_STATUS + HOME_SCORE + mat_hard
+             , data = mn)
+summary(fit_both)
+add_ci4interaction_both(fit_both, term1 = "P1", interaction1 = "P1:SEXFemale", term2 = "P2", interaction2 = "SEXFemale:P2")
+glance(fit_both)[,-c(11:12)]
+```
+
+#### Table 3
 
 ```{r}
 tabp1 = add_ci4interaction(fit_p1a, "P1", "P1:SEXFemale")[c(2,11:12),] %>% mutate(pattern = "Pattern 1")
@@ -351,6 +362,32 @@ model_table = bind_rows(tabp1, tabp2)[,c(1:2, 6:8)] %>% mutate(model = "Traditio
          term = str_c(pattern, term)) %>% 
     dplyr::select(-`2.5 %`, -`97.5 %`, -pattern)
 model_table
+
+# health model table
+# stargazer::stargazer(model_table, summary = F)
+```
+
+### New Table 3
+
+```{r}
+tab_both = add_ci4interaction_both(fit_both, term1 = "P1", interaction1 = "P1:SEXFemale", 
+                                   term2 = "P2", interaction2 = "SEXFemale:P2")
+
+
+new_model_table =
+  tab_both[,c(1:2, 6:7)] %>% mutate(model = "Traditional") %>% 
+  filter(term %in% c("P1 in males", "P2 in males", "P1 in females", "P2 in females",
+                     "P1:SEXFemale", "SEXFemale:P2")) %>% 
+  mutate(term = ifelse(term == "P1:SEXFemale", "Pattern 1 interaction term", term),
+         term = ifelse(term == "SEXFemale:P2", "Pattern 2 interaction term", term),
+         term = str_replace(term, "P1", "Pattern 1"),
+         term = str_replace(term, "P2", "Pattern 2")) %>% 
+  dplyr::select(model, term, everything()) %>% 
+  arrange(term) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  mutate(`95% Confidence Interval` = str_c("(", `2.5 %`, ", ", `97.5 %`, ")")) %>% 
+    dplyr::select(-`2.5 %`, -`97.5 %`)
+new_model_table
 
 # health model table
 # stargazer::stargazer(model_table, summary = F)

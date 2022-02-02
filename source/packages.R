@@ -3,7 +3,8 @@ options(scipen = 999)
 # packages used
 list.of.packages <- c( "haven", "tidyverse", "RColorBrewer", "mgcv", "janitor", "gt", "reshape2", "broom", 
                        "tableone", "xtable", "GGally", "gtsummary", "huxtable", "rcompanion", "R.matlab", 
-                       "ggsci", "patchwork", "rstan", "bayesplot", "shinystan", "rstanarm", "tictoc", "recipes", 
+                       "ggsci", "patchwork", "rstan", "bayesplot", "shinystan",  "tictoc", "recipes", 
+                       #"rstanarm",
                        "ggridges", "bayestestR", "olsrr", "mvoutlier", "outliers", "EnvStats", "finalfit",  
                        "mice", "VIM")
 
@@ -143,3 +144,60 @@ add_ci4int_bayes = function(fit) {
     bind_rows(.,new_var) %>% 
     mutate_at(vars(2:9), round, 2)
 }
+
+# add CI for interaction term to tidy output
+add_ci4interaction_both <- function(fit, term1, interaction1, term2, interaction2) {
+  # CONFIDENCE INTERVAL for pattern in females
+  # Compute association and its uncertainty 
+  
+  # here we create tables of coefficients and covariance
+  coef.mat <- summary(fit)$coefficients
+  var.mat  <- vcov(fit)
+  
+  # the total term for the association is the 
+  # sum of P1 in the reference sex plus the term for P1:female
+  beta.Pf_1 <- coef.mat[term1,1] + coef.mat[interaction1,1]
+  
+  # need this for both interactions
+  # sum of P2 in the reference sex plus the term for P2:female
+  beta.Pf_2 <- coef.mat[term2,1] + coef.mat[interaction2,1]
+  
+  # Compute variance in order to compute standard error
+  # We must compute the variance for the total term s
+  # Var(Beta1 + Beta2) = Var(Beta1) + Var(Beta2) + 2*CoVar(Beta1, Beta2) 
+  var.Pf_1 <- var.mat[term1, term1] + 
+    var.mat[interaction1, interaction1] +
+    2*var.mat[term1, interaction1]
+  
+  var.Pf_2 <- var.mat[term2, term2] + 
+    var.mat[interaction2, interaction2] +
+    2*var.mat[term2, interaction2]
+  
+  # this is st error NOT std
+  ste.Pf_1  <-  sqrt(abs(var.Pf_1))
+  ste.Pf_2  <-  sqrt(abs(var.Pf_2))
+  
+  # compute confidence intervals 
+  lci.Pf_1 <- beta.Pf_1 - 1.96*ste.Pf_1
+  uci.Pf_1 <- beta.Pf_1 + 1.96*ste.Pf_1
+  
+  lci.Pf_2 <- beta.Pf_2 - 1.96*ste.Pf_2
+  uci.Pf_2 <- beta.Pf_2 + 1.96*ste.Pf_2
+  
+  # 2 calculate the test statistic: t = Est/SE
+  # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
+  test_stat_1 = abs(beta.Pf_1/ste.Pf_1)
+  pvalue_1 = exp(-0.717*test_stat_1 - 0.416*test_stat_1^2)
+  
+  test_stat_2 = abs(beta.Pf_2/ste.Pf_2)
+  pvalue_2 = exp(-0.717*test_stat_2 - 0.416*test_stat_2^2)
+  
+  tidy_ci(fit) %>% 
+    bind_rows(., tibble(term = paste0(term1, " in females"), estimate = beta.Pf_1, std.error = ste.Pf_1,
+                        statistic = test_stat_1, p.value = pvalue_1, `2.5 %` = lci.Pf_1, `97.5 %` = uci.Pf_1)) %>% 
+    bind_rows(., tibble(term = paste0(term2, " in females"), estimate = beta.Pf_2, std.error = ste.Pf_2,
+                        statistic = test_stat_2, p.value = pvalue_2, `2.5 %` = lci.Pf_2, `97.5 %` = uci.Pf_2)) %>% 
+    mutate(term = ifelse(term == term1, paste(term1, "in males"), term),
+           term = ifelse(term == term2, paste(term2, "in males"), term))
+}
+

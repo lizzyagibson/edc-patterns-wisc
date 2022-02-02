@@ -92,6 +92,22 @@ Wbeta2  = (bayes$wbeta2/17.2979)*3.3636
 ```{r, standat}
 # Robbie: So Stan always takes in a list for input data?
 # Lizzy: Yes! At least, the R-Stan interface does it that way.
+both_dat = list(N = N,
+                C = C,
+                x = x,
+                y = y,
+                sex = sex,
+                # pattern 1
+                alpha_w_1 = Walpha1,
+                beta_w_1  = Wbeta1,
+                alpha_a_1 = Aalpha1,
+                beta_a_1  = Abeta1,
+                # pattern 2
+                alpha_w_2 = Walpha2,
+                beta_w_2  = Wbeta2,
+                alpha_a_2 = Aalpha2,
+                beta_a_2  = Abeta2)
+
 p1_dat = list(N = N,
                   C = C,
                   x = x,
