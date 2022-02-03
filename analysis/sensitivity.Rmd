@@ -241,3 +241,74 @@ explanatory = c("ETH","M_EDU","MARITAL_STATUS","SMOKER_IN_HOME","SEX","M_IQ",
 
 model_m %>% missing_compare(., dependent = "HOME_SCORE", explanatory) 
 ```
+
+## Regular OLS
+
+```{r}
+mn_phenol[,1:9]
+mn_pht[,1:10]
+
+all_dat = mn %>% inner_join(mn_phenol[,1:9]) %>% inner_join(mn_pht[,1:10])
+all_dat
+
+full_reg <- lm(WISC ~ MEHHP + MECPP + MEOHP+ MEHP + MCPP + MIBP +  MBP +  MBZP + MEP +
+                      BP_3  +  B_PB + M_PB + P_PB  +  TCS + DCP_24 + DCP_25 +  BPA +
+                      SEX + M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE + mat_hard
+             , data = all_dat)
+
+tidy_ci(full_reg) %>% select(-std.error, -statistic) %>% .[2:18,]
+```
+
+## Groupwise averages
+
+```{r}
+scaled_dat = all_dat %>% 
+  mutate_at(vars(20:36), function(x) x/sd(x)) %>% 
+  mutate(pht = (MEHHP + MECPP + MEOHP+ MEHP + MCPP + MIBP +  MBP +  MBZP + MEP)/9,
+         phenol = (BP_3  +  B_PB + M_PB + P_PB  +  TCS + DCP_24 + DCP_25 +  BPA)/8)
+
+group_reg <- lm(WISC ~ pht + phenol + SEX +
+                  pht*SEX + phenol*SEX +
+                  M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE + mat_hard
+             , data = scaled_dat)
+
+tidy_ci(group_reg) %>% select(-std.error, -statistic)
+
+add_ci4interaction_both(group_reg, term1 = "pht", interaction1 = "pht:SEXFemale", term2 = "phenol", interaction2 = "phenol:SEXFemale")
+```
+
+## PCA
+```{r}
+just_edc = scaled_dat[,20:36]
+
+pca_out = prcomp(just_edc)
+plot(pca_out)
+
+sum((pca_out$sdev^2/sum(pca_out$sdev^2))[1:4])
+
+rotation <- as.data.frame.matrix(pca_out$rotation) ## rotation is the loadings variable within the pca output.
+rotation$chem <- row.names(rotation)
+rotation
+
+rotation %>% 
+  pivot_longer(1:17)  %>% 
+  filter(name %in% c("PC1", "PC2", "PC3", "PC4")) %>% 
+  ggplot(aes(x = chem, y = value)) + geom_col() +
+  facet_wrap(~ name) + theme_bw() + 
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 90, hjust = 1),
+        strip.background = element_rect(fill = "white")) +
+  geom_hline(yintercept = 0, size = 0.2) +
+  labs(x = "Chemicals",
+       y = "Loadings")
+```
+
+```{r}
+pca_dat = scaled_dat %>% bind_cols(pca_out$x %>% as_tibble())
+
+pca_reg <- lm(WISC ~ SEX + PC1 + PC2 + PC3 + PC4 +
+                  M_IQ + ALCOHOL + M_EDU + M_AGE + MARITAL_STATUS + HOME_SCORE + mat_hard
+             , data = pca_dat)
+
+tidy_ci(pca_reg) %>% select(-std.error, -statistic)
+```
+
