@@ -201,3 +201,102 @@ add_ci4interaction_both <- function(fit, term1, interaction1, term2, interaction
            term = ifelse(term == term2, paste(term2, "in males"), term))
 }
 
+# add distribution for interaction term to Bayesian output
+# FOR MODEL WITH BOTH PATTERNS
+add_ci4int_bayes_both = function(fit) {
+  # need interaction sum for each pattern
+  int_sum_1 = summary(fit, c("beta_int_1", "beta_sex", "beta_p_1"))$summary
+  int_sum_2 = summary(fit, c("beta_int_2", "beta_sex", "beta_p_2"))$summary
+  
+  params = names(fit)[grep("(alpha|beta)", names(fit))]
+  model_sum = summary(fit, params)$summary
+  
+  ext <- extract(fit)
+  
+  post_coef = cbind(ext$alpha, ext$beta_c, 
+                    ext$beta_int_1, ext$beta_int_2,ext$beta_sex, 
+                    ext$beta_p_1, ext$beta_p_2) %>% as_tibble()
+  
+  colnames(post_coef) = params
+  # interaction coefficients for each pattern
+  int_coefs_1 = post_coef %>% dplyr::select(beta_p_1, beta_int_1)
+  int_coefs_2 = post_coef %>% dplyr::select(beta_p_2, beta_int_2)
+  
+  # all steps for both patterns
+  coef1_p1 = int_coefs_1$beta_p_1
+  coef2_p1 = int_coefs_1$beta_int_1
+  
+  coef1_p2 = int_coefs_2$beta_p_2
+  coef2_p2 = int_coefs_2$beta_int_2
+  
+  # get covariance and beta in females for both patterns
+  covmat_1 = cov(int_coefs_1)
+  beta_f_1 = coef1_p1 + coef2_p1
+  
+  covmat_2 = cov(int_coefs_2)
+  beta_f_2 = coef1_p2 + coef2_p2
+
+  # get variance in females for both patterns
+  var_f_1 = covmat_1[1, 1] + 
+    covmat_1[2, 2] +
+    2*covmat_1[1, 2]
+  
+  var_f_2 = covmat_2[1, 1] + 
+    covmat_2[2, 2] +
+    2*covmat_2[1, 2]
+
+  # this is std dev not std error
+  # get sd for each pattern in females
+  sd_f_1  <- sqrt(abs(var_f_1))
+  sd_f_2  <- sqrt(abs(var_f_2))
+  
+  # take min sample size as conservative est.
+  # sample size for each patter
+  sampsize_1 = min(int_sum_1[1,9], int_sum_1[3,9])
+  sampsize_2 = min(int_sum_2[1,9], int_sum_2[3,9])
+  
+  # this is std error
+  # std err for both patterns in females
+  se_f_1  <- sd_f_1/sqrt(sampsize_1)
+  se_f_2  <- sd_f_2/sqrt(sampsize_2)
+  
+  # get confidence intervals for each
+  lci.f_1 <- mean(beta_f_1) - 1.96*se_f_1
+  uci.f_1 <- mean(beta_f_1) + 1.96*se_f_1
+  
+  lci.f_2 <- mean(beta_f_2) - 1.96*se_f_2
+  uci.f_2 <- mean(beta_f_2) + 1.96*se_f_2
+  
+  # 2 calculate the test statistic: t = Est/SE
+  # 3 calculate the P value2: P = exp(−0.717×z − 0.416×z2).
+  # test_stat = abs(mean(beta_f)/se_f)
+  # pvalue = exp(-0.717*test_stat - 0.416*test_stat^2)
+  # NO BAYESIAN PVALUE
+  
+  # get quanties for both patterns in females
+  q_1 = quantile(beta_f_1, probs = c(0.025, .25, .50, .75, .975)) %>% as.data.frame() %>% 
+    rownames_to_column() %>% 
+    pivot_wider(names_from = "rowname",
+                values_from = ".")
+  
+  q_2 = quantile(beta_f_2, probs = c(0.025, .25, .50, .75, .975)) %>% as.data.frame() %>% 
+    rownames_to_column() %>% 
+    pivot_wider(names_from = "rowname",
+                values_from = ".")
+  
+  var_1 = tibble(beta = "Pattern 1 in females", mean = round(mean(beta_f_1), 4), 
+                   se_mean = round(se_f_1,4), sd = round(sd_f_1,4)) %>% 
+    bind_cols(., q_1)
+  
+  var_2 = tibble(beta = "Pattern 2 in females", mean = round(mean(beta_f_2), 4), 
+                   se_mean = round(se_f_2,4), sd = round(sd_f_2,4)) %>% 
+    bind_cols(., q_2)
+  
+  # M_AGE + M_EDU + MARITAL_STATUS + HOME_SCORE + M_IQ + ALCOHOL + mat_hard, 
+  as.data.frame(model_sum)[,-c(9:10)] %>% 
+    rownames_to_column(var="beta") %>% 
+    mutate(beta = c("alpha", "age", "edu", "marital", "home", "iq", "alcohol", "mat_hard",
+                    "Sex*Pattern 1", "Sex*Pattern 2", "Sex", "Pattern 1 in males", "Pattern 2 in males")) %>%
+    bind_rows(.,var_1, var_2) %>% 
+    mutate_at(vars(2:9), round, 2)
+}

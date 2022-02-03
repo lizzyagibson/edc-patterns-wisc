@@ -118,6 +118,7 @@ p1_dat = list(N = N,
 ## Bayesian models
 
 * this is only non-informative models
+
 ```{r}
 both_patterns <- stan(
   file = "./Stan/models/bn2mf_score_reg_both.stan",  # Stan program
@@ -126,7 +127,7 @@ both_patterns <- stan(
     warmup = 1000,                # number of warmup iterations per chain
     iter = 5000,                  # total number of iterations per chain
     cores = 2)                    # number of cores
-# save(p1_non, file = "./Stan/fits/pattern1_non.rda")
+# save(both_patterns, file = "./Stan/fits/patterns_both.rda")
 
 p1_non <- stan(
   file = "./Stan/models/bn2mf_score_reg_int_gamma.stan",  # Stan program
@@ -201,7 +202,31 @@ trace = c("beta_int", "beta_sex", "beta_p")
 stan_trace(p1_non, pars = trace, nrow = 3)
 ```
 
+### New Bayesian Table 3
 ### Summary
+```{r}
+bayes_both = add_ci4int_bayes_both(both_patterns)[c(9:15),]
+
+
+bayes_table_both = bayes_both[-3,c(1,7, 5, 9)] %>% as_tibble() %>% 
+            rename(term = beta, estimate = `50%`) %>% 
+            mutate(model = "Bayesian") %>% 
+  dplyr::select(model, everything()) %>% 
+  arrange(model, term) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  mutate(`95% Confidence Interval` = str_c("(", `2.5%`, ", ", `97.5%`, ")")) %>% 
+    dplyr::select(-`2.5%`, -`97.5%`)
+bayes_table_both
+
+# health model table
+# stargazer::stargazer(bayes_table, summary = F)
+```
+
+#### Both patterns
+```{r, both}
+params = names(both_patterns)[grep("(alpha|beta)", names(both_patterns))]
+add_ci4int_bayes_both(both_patterns)
+```
 
 #### Pattern 1
 
@@ -264,8 +289,6 @@ add_ci4int_bayes(p2_non)[,1:2] %>%
 ```
 
 ### Viz
-
-#### Pattern 1
 
 ##### Non-informative
 ```{r}
@@ -433,3 +456,10 @@ supp_table
 
 # stargazer::stargazer(supp_table[,3:4], summary = F)
 ```
+
+## Check fitted values
+```{r}
+y_pred = summary(both_patterns)$summary[grep('tilde', rownames(summary(both_patterns)$summary)),6]
+min(y_pred)
+```
+
